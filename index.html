@@ -12,43 +12,12 @@
     background: #f2f2f7;
     color: #1c1c1e;
   }
-  .screen { display: none; min-height: 100vh; }
-  .screen.active { display: block; }
-
-  /* LOGIN */
-  #loginScreen {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 24px;
-  }
-  #loginScreen h1 { margin-bottom: 24px; font-size: 24px; }
-  #loginScreen input {
-    width: 100%; max-width: 320px;
-    padding: 14px; margin-bottom: 12px;
-    border: 1px solid #ccc; border-radius: 10px;
-    font-size: 16px;
-  }
-  #loginScreen button {
-    width: 100%; max-width: 320px;
-    padding: 14px; border: none; border-radius: 10px;
-    background: #007aff; color: white; font-size: 16px;
-    font-weight: 600; margin-top: 8px;
-  }
-  #loginError { color: #ff3b30; margin-top: 10px; font-size: 14px; }
-
-  /* APP */
   header.topbar {
     background: white; padding: 16px 20px;
     display: flex; justify-content: space-between; align-items: center;
     border-bottom: 1px solid #e0e0e0;
   }
   header.topbar h2 { font-size: 18px; }
-  header.topbar button {
-    background: none; border: none; color: #ff3b30; font-size: 15px;
-  }
   main { padding: 20px; padding-bottom: 90px; }
 
   nav.tabbar {
@@ -71,53 +40,36 @@
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="loginScreen" class="screen active">
-  <h1>App de Préstamos</h1>
-  <input type="email" id="loginEmail" placeholder="Correo">
-  <input type="password" id="loginPassword" placeholder="Contraseña">
-  <button onclick="iniciarSesion()">Ingresar</button>
-  <div id="loginError"></div>
-</div>
+<header class="topbar">
+  <h2 id="tituloSeccion">Clientes</h2>
+</header>
 
-<!-- APP PRINCIPAL -->
-<div id="appScreen" class="screen">
-  <header class="topbar">
-    <h2 id="tituloSeccion">Clientes</h2>
-    <button onclick="cerrarSesion()">Salir</button>
-  </header>
+<main>
+  <div id="seccionClientes" class="card">
+    <p>Aquí irá el módulo de Clientes.</p>
+  </div>
+  <div id="seccionPrestamos" class="card" style="display:none;">
+    <p>Aquí irá el módulo de Préstamos.</p>
+  </div>
+  <div id="seccionPagos" class="card" style="display:none;">
+    <p>Aquí irá el módulo de Pagos.</p>
+  </div>
+</main>
 
-  <main>
-    <div id="seccionClientes" class="card">
-      <p>Aquí irá el módulo de Clientes.</p>
-    </div>
-    <div id="seccionPrestamos" class="card" style="display:none;">
-      <p>Aquí irá el módulo de Préstamos.</p>
-    </div>
-    <div id="seccionPagos" class="card" style="display:none;">
-      <p>Aquí irá el módulo de Pagos.</p>
-    </div>
-  </main>
+<nav class="tabbar">
+  <button onclick="cambiarSeccion('Clientes')" class="active" id="tabClientes">
+    <span class="icon">👤</span>Clientes
+  </button>
+  <button onclick="cambiarSeccion('Prestamos')" id="tabPrestamos">
+    <span class="icon">💵</span>Préstamos
+  </button>
+  <button onclick="cambiarSeccion('Pagos')" id="tabPagos">
+    <span class="icon">📄</span>Pagos
+  </button>
+</nav>
 
-  <nav class="tabbar">
-    <button onclick="cambiarSeccion('Clientes')" class="active" id="tabClientes">
-      <span class="icon">👤</span>Clientes
-    </button>
-    <button onclick="cambiarSeccion('Prestamos')" id="tabPrestamos">
-      <span class="icon">💵</span>Préstamos
-    </button>
-    <button onclick="cambiarSeccion('Pagos')" id="tabPagos">
-      <span class="icon">📄</span>Pagos
-    </button>
-  </nav>
-</div>
-
-<!-- FIREBASE -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -131,31 +83,8 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
   const db = getFirestore(app);
-
-  window.iniciarSesion = function () {
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    signInWithEmailAndPassword(auth, email, password)
-      .catch((error) => {
-        document.getElementById('loginError').textContent = "Correo o contraseña incorrectos.";
-      });
-  };
-
-  window.cerrarSesion = function () {
-    signOut(auth);
-  };
-
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      document.getElementById('loginScreen').classList.remove('active');
-      document.getElementById('appScreen').classList.add('active');
-    } else {
-      document.getElementById('appScreen').classList.remove('active');
-      document.getElementById('loginScreen').classList.add('active');
-    }
-  });
+  window.db = db;
 
   window.cambiarSeccion = function (nombre) {
     document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
