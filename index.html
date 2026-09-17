@@ -181,4 +181,168 @@
     projectId: "app-de-prestamo",
     storageBucket: "app-de-prestamo.firebasestorage.app",
     messagingSenderId: "34230125675",
-    appId: "1:34230125675:web:d985df8545f1cd
+    appId: "1:34230125675:web:d985df8545f1cd38225d2e",
+    measurementId: "G-PCFMFSXV0P"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getStorage ? getFirestore(app) : null;
+  const storage = getStorage(app);
+
+  let clientesCache = [];
+  let archivoFotoSeleccionado = null;
+  let fotoUrlActual = null;
+
+  // --- Navegación de pestañas ---
+  window.cambiarSeccion = function (nombre) {
+    document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
+    document.querySelectorAll('nav.tabbar button').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('seccion' + nombre).style.display = 'block';
+    document.getElementById('tab' + nombre).classList.add('active');
+    document.getElementById('tituloSeccion').textContent =
+      nombre === 'Prestamos' ? 'Préstamos' : nombre;
+    document.getElementById('btnAgregarCliente').style.display =
+      nombre === 'Clientes' ? 'block' : 'none';
+  };
+
+  // --- Modal ---
+  window.abrirModalCliente = function () {
+    document.getElementById('modalTitulo').textContent = 'Nuevo cliente';
+    document.getElementById('clienteId').value = '';
+    document.getElementById('clienteNombre').value = '';
+    document.getElementById('clienteTelefono').value = '';
+    document.getElementById('clienteDireccion').value = '';
+    document.getElementById('clienteCedula').value = '';
+    document.getElementById('previewFoto').style.display = 'none';
+    document.getElementById('previewFoto').src = '';
+    archivoFotoSeleccionado = null;
+    fotoUrlActual = null;
+    document.getElementById('modalCliente').classList.add('active');
+  };
+
+  window.cerrarModalCliente = function () {
+    document.getElementById('modalCliente').classList.remove('active');
+  };
+
+  window.previsualizarFoto = function (event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    archivoFotoSeleccionado = file;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const img = document.getElementById('previewFoto');
+      img.src = e.target.result;
+      img.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // --- Guardar cliente (crear o editar) ---
+  window.guardarCliente = async function () {
+    const id = document.getElementById('clienteId').value;
+    const nombre = document.getElementById('clienteNombre').value.trim();
+    const telefono = document.getElementById('clienteTelefono').value.trim();
+    const direccion = document.getElementById('clienteDireccion').value.trim();
+    const cedula = document.getElementById('clienteCedula').value.trim();
+
+    if (!nombre) {
+      alert('El nombre es obligatorio.');
+      return;
+    }
+
+    const boton = document.getElementById('btnGuardarCliente');
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+
+    try {
+      let fotoURL = fotoUrlActual || '';
+
+      if (archivoFotoSeleccionado) {
+        const nombreArchivo = 'clientes/' + Date.now() + '_' + archivoFotoSeleccionado.name;
+        const storageRef = ref(storage, nombreArchivo);
+        await uploadBytes(storageRef, archivoFotoSeleccionado);
+        fotoURL = await getDownloadURL(storageRef);
+      }
+
+      const datos = { nombre, telefono, direccion, cedula, fotoURL };
+
+      if (id) {
+        await updateDoc(doc(db, 'clientes', id), datos);
+      } else {
+        datos.fechaCreacion = Date.now();
+        await addDoc(collection(db, 'clientes'), datos);
+      }
+
+      cerrarModalCliente();
+    } catch (error) {
+      alert('Error al guardar: ' + error.message);
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Guardar cliente';
+    }
+  };
+
+  // --- Editar cliente ---
+  window.editarCliente = function (id) {
+    const cliente = clientesCache.find(c => c.id === id);
+    if (!cliente) return;
+    document.getElementById('modalTitulo').textContent = 'Editar cliente';
+    document.getElementById('clienteId').value = cliente.id;
+    document.getElementById('clienteNombre').value = cliente.nombre || '';
+    document.getElementById('clienteTelefono').value = cliente.telefono || '';
+    document.getElementById('clienteDireccion').value = cliente.direccion || '';
+    document.getElementById('clienteCedula').value = cliente.cedula || '';
+    archivoFotoSeleccionado = null;
+    fotoUrlActual = cliente.fotoURL || null;
+    const img = document.getElementById('previewFoto');
+    if (cliente.fotoURL) {
+      img.src = cliente.fotoURL;
+      img.style.display = 'block';
+    } else {
+      img.style.display = 'none';
+    }
+    document.getElementById('modalCliente').classList.add('active');
+  };
+
+  // --- Eliminar cliente ---
+  window.eliminarCliente = async function (id) {
+    if (!confirm('¿Eliminar este cliente?')) return;
+    try {
+      await deleteDoc(doc(db, 'clientes', id));
+    } catch (error) {
+      alert('Error al eliminar: ' + error.message);
+    }
+  };
+
+  // --- Escuchar cambios en tiempo real ---
+  const q = query(collection(db, 'clientes'), orderBy('fechaCreacion', 'desc'));
+  onSnapshot(q, (snapshot) => {
+    clientesCache = [];
+    snapshot.forEach(docSnap => {
+      clientesCache.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderizarClientes();
+  });
+
+  function renderizarClientes() {
+    const contenedor = document.getElementById('listaClientes');
+    if (clientesCache.length === 0) {
+      contenedor.innerHTML = '<div class="empty-msg">Aún no hay clientes. Toca + para agregar uno.</div>';
+      return;
+    }
+    contenedor.innerHTML = clientesCache.map(c => `
+      <div class="cliente-item">
+        <img class="cliente-foto" src="${c.fotoURL || ''}" onerror="this.style.background='#ddd'">
+        <div class="cliente-info">
+          <div class="cliente-nombre">${c.nombre}</div>
+          <div class="cliente-tel">${c.telefono || 'Sin teléfono'}</div>
+        </div>
+        <button class="btn-edit" onclick="editarCliente('${c.id}')">Editar</button>
+        <button class="btn-danger" onclick="eliminarCliente('${c.id}')">Eliminar</button>
+      </div>
+    `).join('');
+  }
+</script>
+
+</body>
+</html>
