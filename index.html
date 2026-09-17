@@ -44,8 +44,9 @@
   }
   .btn-danger { color: #ff3b30; background: none; border: none; font-size: 14px; }
   .btn-edit { color: #007aff; background: none; border: none; font-size: 14px; margin-right: 12px; }
+  .btn-ok { color: #34c759; background: none; border: none; font-size: 14px; margin-right: 12px; }
 
-  input, textarea {
+  input, textarea, select {
     width: 100%; padding: 12px; margin-bottom: 10px;
     border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
   }
@@ -98,6 +99,31 @@
     background: #f7f7f7; color: #444; font-size: 14px; margin-bottom: 14px;
   }
   .empty-msg { text-align: center; color: #999; padding: 30px 0; font-size: 14px; }
+
+  .alerta-cobros {
+    background: #fff3cd; border: 1px solid #ffe08a; border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 14px; font-size: 14px;
+  }
+  .alerta-cobros.vacia { display: none; }
+  .alerta-cobros strong { display: block; margin-bottom: 4px; }
+
+  .prestamo-item {
+    padding: 14px 0; border-bottom: 1px solid #eee;
+  }
+  .prestamo-item:last-child { border-bottom: none; }
+  .prestamo-top { display: flex; justify-content: space-between; align-items: center; }
+  .prestamo-nombre { font-weight: 600; font-size: 15px; }
+  .prestamo-monto { font-weight: 600; font-size: 15px; }
+  .prestamo-fecha { font-size: 13px; color: #666; margin-top: 2px; }
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600; margin-top: 6px;
+  }
+  .badge-verde { background: #d4f4dd; color: #1a7d3c; }
+  .badge-naranja { background: #ffe8cc; color: #c96a00; }
+  .badge-rojo { background: #ffd6d6; color: #c9302c; }
+  .badge-gris { background: #e5e5ea; color: #666; }
+  .prestamo-acciones { margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -112,15 +138,21 @@
       <div id="listaClientes"></div>
     </div>
   </div>
-  <div id="seccionPrestamos" class="card" style="display:none;">
-    <p>Aquí irá el módulo de Préstamos.</p>
+
+  <div id="seccionPrestamos" style="display:none;">
+    <div class="alerta-cobros" id="alertaCobros"></div>
+    <div class="card">
+      <div id="listaPrestamos"></div>
+    </div>
   </div>
+
   <div id="seccionPagos" class="card" style="display:none;">
     <p>Aquí irá el módulo de Pagos.</p>
   </div>
 </main>
 
 <button class="fab" id="btnAgregarCliente" onclick="abrirModalCliente()">+</button>
+<button class="fab" id="btnAgregarPrestamo" style="display:none;" onclick="abrirModalPrestamo()">+</button>
 
 <nav class="tabbar">
   <button onclick="cambiarSeccion('Clientes')" class="active" id="tabClientes">
@@ -165,6 +197,30 @@
   </div>
 </div>
 
+<!-- MODAL PRESTAMO -->
+<div class="modal-overlay" id="modalPrestamo">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Nuevo préstamo</h3>
+      <button class="modal-close" onclick="cerrarModalPrestamo()">✕</button>
+    </div>
+
+    <label>Cliente</label>
+    <select id="prestamoCliente"></select>
+
+    <label>Monto prestado</label>
+    <input type="number" id="prestamoMonto" placeholder="Ej. 5000">
+
+    <label>Fecha de vencimiento (próximo cobro)</label>
+    <input type="date" id="prestamoFecha">
+
+    <label>Notas (opcional)</label>
+    <input type="text" id="prestamoNotas" placeholder="Ej. cobro semanal, plazo 30 días...">
+
+    <button class="btn-primary" id="btnGuardarPrestamo" onclick="guardarPrestamo()">Guardar préstamo</button>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import {
@@ -172,7 +228,7 @@
     onSnapshot, orderBy, query
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import {
-    getStorage, ref, uploadBytes, getDownloadURL, deleteObject
+    getStorage, ref, uploadBytes, getDownloadURL
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
   const firebaseConfig = {
@@ -186,10 +242,11 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  const db = getStorage ? getFirestore(app) : null;
+  const db = getFirestore(app);
   const storage = getStorage(app);
 
   let clientesCache = [];
+  let prestamosCache = [];
   let archivoFotoSeleccionado = null;
   let fotoUrlActual = null;
 
@@ -203,9 +260,12 @@
       nombre === 'Prestamos' ? 'Préstamos' : nombre;
     document.getElementById('btnAgregarCliente').style.display =
       nombre === 'Clientes' ? 'block' : 'none';
+    document.getElementById('btnAgregarPrestamo').style.display =
+      nombre === 'Prestamos' ? 'block' : 'none';
   };
 
-  // --- Modal ---
+  // ===================== CLIENTES =====================
+
   window.abrirModalCliente = function () {
     document.getElementById('modalTitulo').textContent = 'Nuevo cliente';
     document.getElementById('clienteId').value = '';
@@ -237,7 +297,6 @@
     reader.readAsDataURL(file);
   };
 
-  // --- Guardar cliente (crear o editar) ---
   window.guardarCliente = async function () {
     const id = document.getElementById('clienteId').value;
     const nombre = document.getElementById('clienteNombre').value.trim();
@@ -282,7 +341,6 @@
     }
   };
 
-  // --- Editar cliente ---
   window.editarCliente = function (id) {
     const cliente = clientesCache.find(c => c.id === id);
     if (!cliente) return;
@@ -304,7 +362,6 @@
     document.getElementById('modalCliente').classList.add('active');
   };
 
-  // --- Eliminar cliente ---
   window.eliminarCliente = async function (id) {
     if (!confirm('¿Eliminar este cliente?')) return;
     try {
@@ -314,14 +371,14 @@
     }
   };
 
-  // --- Escuchar cambios en tiempo real ---
-  const q = query(collection(db, 'clientes'), orderBy('fechaCreacion', 'desc'));
-  onSnapshot(q, (snapshot) => {
+  const qClientes = query(collection(db, 'clientes'), orderBy('fechaCreacion', 'desc'));
+  onSnapshot(qClientes, (snapshot) => {
     clientesCache = [];
     snapshot.forEach(docSnap => {
       clientesCache.push({ id: docSnap.id, ...docSnap.data() });
     });
     renderizarClientes();
+    llenarSelectClientes();
   });
 
   function renderizarClientes() {
@@ -341,6 +398,163 @@
         <button class="btn-danger" onclick="eliminarCliente('${c.id}')">Eliminar</button>
       </div>
     `).join('');
+  }
+
+  function llenarSelectClientes() {
+    const select = document.getElementById('prestamoCliente');
+    if (clientesCache.length === 0) {
+      select.innerHTML = '<option value="">Primero agrega un cliente</option>';
+      return;
+    }
+    select.innerHTML = clientesCache.map(c =>
+      `<option value="${c.id}">${c.nombre}</option>`
+    ).join('');
+  }
+
+  // ===================== PRESTAMOS =====================
+
+  window.abrirModalPrestamo = function () {
+    if (clientesCache.length === 0) {
+      alert('Primero agrega al menos un cliente.');
+      return;
+    }
+    document.getElementById('prestamoMonto').value = '';
+    document.getElementById('prestamoFecha').value = '';
+    document.getElementById('prestamoNotas').value = '';
+    document.getElementById('modalPrestamo').classList.add('active');
+  };
+
+  window.cerrarModalPrestamo = function () {
+    document.getElementById('modalPrestamo').classList.remove('active');
+  };
+
+  window.guardarPrestamo = async function () {
+    const clienteId = document.getElementById('prestamoCliente').value;
+    const monto = parseFloat(document.getElementById('prestamoMonto').value);
+    const fechaVencimiento = document.getElementById('prestamoFecha').value;
+    const notas = document.getElementById('prestamoNotas').value.trim();
+
+    if (!clienteId || !monto || !fechaVencimiento) {
+      alert('Completa cliente, monto y fecha de vencimiento.');
+      return;
+    }
+
+    const cliente = clientesCache.find(c => c.id === clienteId);
+    const boton = document.getElementById('btnGuardarPrestamo');
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+
+    try {
+      await addDoc(collection(db, 'prestamos'), {
+        clienteId,
+        clienteNombre: cliente ? cliente.nombre : 'Cliente',
+        monto,
+        fechaVencimiento,
+        notas,
+        estado: 'activo',
+        fechaCreacion: Date.now()
+      });
+      cerrarModalPrestamo();
+    } catch (error) {
+      alert('Error al guardar: ' + error.message);
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Guardar préstamo';
+    }
+  };
+
+  window.marcarPagado = async function (id) {
+    try {
+      await updateDoc(doc(db, 'prestamos', id), { estado: 'pagado' });
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
+  window.eliminarPrestamo = async function (id) {
+    if (!confirm('¿Eliminar este préstamo?')) return;
+    try {
+      await deleteDoc(doc(db, 'prestamos', id));
+    } catch (error) {
+      alert('Error al eliminar: ' + error.message);
+    }
+  };
+
+  const qPrestamos = query(collection(db, 'prestamos'), orderBy('fechaVencimiento', 'asc'));
+  onSnapshot(qPrestamos, (snapshot) => {
+    prestamosCache = [];
+    snapshot.forEach(docSnap => {
+      prestamosCache.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderizarPrestamos();
+  });
+
+  function calcularEstadoFecha(fechaVencimiento) {
+    const hoy = new Date();
+    hoy.setHours(0,0,0,0);
+    const vence = new Date(fechaVencimiento + 'T00:00:00');
+    const diffDias = Math.round((vence - hoy) / (1000 * 60 * 60 * 24));
+    if (diffDias < 0) return 'atrasado';
+    if (diffDias === 0) return 'hoy';
+    return 'aldia';
+  }
+
+  function renderizarPrestamos() {
+    const contenedor = document.getElementById('listaPrestamos');
+    const alerta = document.getElementById('alertaCobros');
+
+    if (prestamosCache.length === 0) {
+      contenedor.innerHTML = '<div class="empty-msg">Aún no hay préstamos. Toca + para agregar uno.</div>';
+      alerta.classList.add('vacia');
+      return;
+    }
+
+    const activos = prestamosCache.filter(p => p.estado !== 'pagado');
+    const atrasados = activos.filter(p => calcularEstadoFecha(p.fechaVencimiento) === 'atrasado');
+    const hoy = activos.filter(p => calcularEstadoFecha(p.fechaVencimiento) === 'hoy');
+
+    if (atrasados.length === 0 && hoy.length === 0) {
+      alerta.classList.add('vacia');
+    } else {
+      alerta.classList.remove('vacia');
+      let texto = '';
+      if (atrasados.length > 0) {
+        texto += `⚠️ <strong>${atrasados.length} cliente(s) atrasado(s):</strong> ` +
+          atrasados.map(p => p.clienteNombre).join(', ') + '. ';
+      }
+      if (hoy.length > 0) {
+        texto += `📅 <strong>${hoy.length} cobro(s) vence(n) hoy:</strong> ` +
+          hoy.map(p => p.clienteNombre).join(', ') + '.';
+      }
+      alerta.innerHTML = texto;
+    }
+
+    contenedor.innerHTML = prestamosCache.map(p => {
+      let badge = '';
+      if (p.estado === 'pagado') {
+        badge = '<span class="badge badge-gris">Pagado</span>';
+      } else {
+        const estado = calcularEstadoFecha(p.fechaVencimiento);
+        if (estado === 'atrasado') badge = '<span class="badge badge-rojo">Atrasado</span>';
+        else if (estado === 'hoy') badge = '<span class="badge badge-naranja">Vence hoy</span>';
+        else badge = '<span class="badge badge-verde">Al día</span>';
+      }
+
+      return `
+        <div class="prestamo-item">
+          <div class="prestamo-top">
+            <div class="prestamo-nombre">${p.clienteNombre}</div>
+            <div class="prestamo-monto">$${Number(p.monto).toLocaleString()}</div>
+          </div>
+          <div class="prestamo-fecha">Vence: ${p.fechaVencimiento}${p.notas ? ' · ' + p.notas : ''}</div>
+          ${badge}
+          <div class="prestamo-acciones">
+            ${p.estado !== 'pagado' ? `<button class="btn-ok" onclick="marcarPagado('${p.id}')">Marcar pagado</button>` : ''}
+            <button class="btn-danger" onclick="eliminarPrestamo('${p.id}')">Eliminar</button>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 </script>
 
