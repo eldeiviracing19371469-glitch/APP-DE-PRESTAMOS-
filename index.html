@@ -36,6 +36,68 @@
     background: white; border-radius: 12px; padding: 18px;
     margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   }
+
+  .btn-primary {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    background: #007aff; color: white; font-size: 16px; font-weight: 600;
+    margin-top: 10px;
+  }
+  .btn-danger { color: #ff3b30; background: none; border: none; font-size: 14px; }
+  .btn-edit { color: #007aff; background: none; border: none; font-size: 14px; margin-right: 12px; }
+
+  input, textarea {
+    width: 100%; padding: 12px; margin-bottom: 10px;
+    border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
+  }
+  label { font-size: 13px; color: #666; display: block; margin-bottom: 4px; }
+
+  .fab {
+    position: fixed; bottom: 90px; right: 20px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: #007aff; color: white; font-size: 28px;
+    border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .cliente-item {
+    display: flex; align-items: center; padding: 12px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .cliente-item:last-child { border-bottom: none; }
+  .cliente-foto {
+    width: 48px; height: 48px; border-radius: 8px; object-fit: cover;
+    background: #ddd; margin-right: 12px; flex-shrink: 0;
+  }
+  .cliente-info { flex: 1; }
+  .cliente-nombre { font-weight: 600; font-size: 15px; }
+  .cliente-tel { font-size: 13px; color: #666; }
+
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); z-index: 100;
+    align-items: flex-end; justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-content {
+    background: white; width: 100%; max-width: 480px;
+    border-radius: 16px 16px 0 0; padding: 20px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px;
+  }
+  .modal-close { font-size: 22px; background: none; border: none; color: #666; }
+
+  .preview-foto {
+    width: 100%; max-width: 200px; height: 140px; object-fit: cover;
+    border-radius: 10px; margin-bottom: 10px; display: none;
+    background: #eee;
+  }
+  .btn-foto {
+    width: 100%; padding: 12px; border: 1px dashed #999; border-radius: 8px;
+    background: #f7f7f7; color: #444; font-size: 14px; margin-bottom: 14px;
+  }
+  .empty-msg { text-align: center; color: #999; padding: 30px 0; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -45,8 +107,10 @@
 </header>
 
 <main>
-  <div id="seccionClientes" class="card">
-    <p>Aquí irá el módulo de Clientes.</p>
+  <div id="seccionClientes">
+    <div class="card" id="listaClientesCard">
+      <div id="listaClientes"></div>
+    </div>
   </div>
   <div id="seccionPrestamos" class="card" style="display:none;">
     <p>Aquí irá el módulo de Préstamos.</p>
@@ -55,6 +119,8 @@
     <p>Aquí irá el módulo de Pagos.</p>
   </div>
 </main>
+
+<button class="fab" id="btnAgregarCliente" onclick="abrirModalCliente()">+</button>
 
 <nav class="tabbar">
   <button onclick="cambiarSeccion('Clientes')" class="active" id="tabClientes">
@@ -68,9 +134,46 @@
   </button>
 </nav>
 
+<!-- MODAL CLIENTE -->
+<div class="modal-overlay" id="modalCliente">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitulo">Nuevo cliente</h3>
+      <button class="modal-close" onclick="cerrarModalCliente()">✕</button>
+    </div>
+
+    <input type="hidden" id="clienteId">
+
+    <label>Nombre completo</label>
+    <input type="text" id="clienteNombre" placeholder="Nombre y apellido">
+
+    <label>Teléfono</label>
+    <input type="tel" id="clienteTelefono" placeholder="Ej. 809-000-0000">
+
+    <label>Dirección</label>
+    <input type="text" id="clienteDireccion" placeholder="Dirección">
+
+    <label>Cédula / Identificación</label>
+    <input type="text" id="clienteCedula" placeholder="Número de identificación">
+
+    <label>Foto de la identificación</label>
+    <img id="previewFoto" class="preview-foto">
+    <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none" onchange="previsualizarFoto(event)">
+    <button class="btn-foto" onclick="document.getElementById('inputFoto').click()">📷 Tomar o subir foto</button>
+
+    <button class="btn-primary" id="btnGuardarCliente" onclick="guardarCliente()">Guardar cliente</button>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import {
+    getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
+    onSnapshot, orderBy, query
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import {
+    getStorage, ref, uploadBytes, getDownloadURL, deleteObject
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAAft1vdr3htDhVwaqPqCtybVt8evPifGY",
@@ -78,23 +181,4 @@
     projectId: "app-de-prestamo",
     storageBucket: "app-de-prestamo.firebasestorage.app",
     messagingSenderId: "34230125675",
-    appId: "1:34230125675:web:d985df8545f1cd38225d2e",
-    measurementId: "G-PCFMFSXV0P"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  window.db = db;
-
-  window.cambiarSeccion = function (nombre) {
-    document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
-    document.querySelectorAll('nav.tabbar button').forEach(btn => btn.classList.remove('active'));
-    document.getElementById('seccion' + nombre).style.display = 'block';
-    document.getElementById('tab' + nombre).classList.add('active');
-    document.getElementById('tituloSeccion').textContent =
-      nombre === 'Prestamos' ? 'Préstamos' : nombre;
-  };
-</script>
-
-</body>
-</html>
+    appId: "1:34230125675:web:d985df8545f1cd
