@@ -114,6 +114,7 @@
   .prestamo-top { display: flex; justify-content: space-between; align-items: center; }
   .prestamo-nombre { font-weight: 600; font-size: 15px; }
   .prestamo-monto { font-weight: 600; font-size: 15px; }
+  .prestamo-detalle { font-size: 13px; color: #666; margin-top: 2px; }
   .prestamo-fecha { font-size: 13px; color: #666; margin-top: 2px; }
   .badge {
     display: inline-block; padding: 3px 10px; border-radius: 20px;
@@ -124,6 +125,14 @@
   .badge-rojo { background: #ffd6d6; color: #c9302c; }
   .badge-gris { background: #e5e5ea; color: #666; }
   .prestamo-acciones { margin-top: 8px; }
+
+  .fila-doble { display: flex; gap: 10px; }
+  .fila-doble > div { flex: 1; }
+  .total-preview {
+    background: #f0f7ff; border-radius: 8px; padding: 10px 12px;
+    font-size: 14px; margin-bottom: 12px; color: #1c1c1e;
+  }
+  .total-preview strong { color: #007aff; }
 </style>
 </head>
 <body>
@@ -208,8 +217,18 @@
     <label>Cliente</label>
     <select id="prestamoCliente"></select>
 
-    <label>Monto prestado</label>
-    <input type="number" id="prestamoMonto" placeholder="Ej. 5000">
+    <div class="fila-doble">
+      <div>
+        <label>Monto prestado</label>
+        <input type="number" id="prestamoMonto" placeholder="Ej. 5000" oninput="actualizarTotalPreview()">
+      </div>
+      <div>
+        <label>% de interés</label>
+        <input type="number" id="prestamoInteres" placeholder="Ej. 20" oninput="actualizarTotalPreview()">
+      </div>
+    </div>
+
+    <div class="total-preview" id="totalPreview">Total a pagar: $0</div>
 
     <label>Fecha de vencimiento (próximo cobro)</label>
     <input type="date" id="prestamoFecha">
@@ -419,8 +438,10 @@
       return;
     }
     document.getElementById('prestamoMonto').value = '';
+    document.getElementById('prestamoInteres').value = '';
     document.getElementById('prestamoFecha').value = '';
     document.getElementById('prestamoNotas').value = '';
+    document.getElementById('totalPreview').textContent = 'Total a pagar: $0';
     document.getElementById('modalPrestamo').classList.add('active');
   };
 
@@ -428,9 +449,18 @@
     document.getElementById('modalPrestamo').classList.remove('active');
   };
 
+  window.actualizarTotalPreview = function () {
+    const monto = parseFloat(document.getElementById('prestamoMonto').value) || 0;
+    const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
+    const total = monto + (monto * interes / 100);
+    document.getElementById('totalPreview').innerHTML =
+      `Total a pagar: <strong>$${total.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong>`;
+  };
+
   window.guardarPrestamo = async function () {
     const clienteId = document.getElementById('prestamoCliente').value;
     const monto = parseFloat(document.getElementById('prestamoMonto').value);
+    const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
     const fechaVencimiento = document.getElementById('prestamoFecha').value;
     const notas = document.getElementById('prestamoNotas').value.trim();
 
@@ -439,6 +469,7 @@
       return;
     }
 
+    const montoTotal = monto + (monto * interes / 100);
     const cliente = clientesCache.find(c => c.id === clienteId);
     const boton = document.getElementById('btnGuardarPrestamo');
     boton.disabled = true;
@@ -449,6 +480,8 @@
         clienteId,
         clienteNombre: cliente ? cliente.nombre : 'Cliente',
         monto,
+        interes,
+        montoTotal,
         fechaVencimiento,
         notas,
         estado: 'activo',
@@ -540,12 +573,16 @@
         else badge = '<span class="badge badge-verde">Al día</span>';
       }
 
+      const totalMostrar = p.montoTotal != null ? p.montoTotal : p.monto;
+      const detalleInteres = p.interes ? `Capital: $${Number(p.monto).toLocaleString()} + ${p.interes}% interés` : '';
+
       return `
         <div class="prestamo-item">
           <div class="prestamo-top">
             <div class="prestamo-nombre">${p.clienteNombre}</div>
-            <div class="prestamo-monto">$${Number(p.monto).toLocaleString()}</div>
+            <div class="prestamo-monto">$${Number(totalMostrar).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
           </div>
+          ${detalleInteres ? `<div class="prestamo-detalle">${detalleInteres}</div>` : ''}
           <div class="prestamo-fecha">Vence: ${p.fechaVencimiento}${p.notas ? ' · ' + p.notas : ''}</div>
           ${badge}
           <div class="prestamo-acciones">
