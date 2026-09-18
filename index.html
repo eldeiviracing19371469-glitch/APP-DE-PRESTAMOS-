@@ -45,6 +45,7 @@
   .btn-danger { color: #ff3b30; background: none; border: none; font-size: 14px; }
   .btn-edit { color: #007aff; background: none; border: none; font-size: 14px; margin-right: 12px; }
   .btn-ok { color: #34c759; background: none; border: none; font-size: 14px; margin-right: 12px; }
+  .btn-interes { color: #c96a00; background: none; border: none; font-size: 14px; margin-right: 12px; }
 
   input, textarea, select {
     width: 100%; padding: 12px; margin-bottom: 10px;
@@ -115,6 +116,7 @@
   .prestamo-nombre { font-weight: 600; font-size: 15px; }
   .prestamo-monto { font-weight: 600; font-size: 15px; }
   .prestamo-detalle { font-size: 13px; color: #666; margin-top: 2px; }
+  .prestamo-interes-linea { font-size: 13px; color: #c96a00; margin-top: 4px; font-weight: 600; }
   .prestamo-fecha { font-size: 13px; color: #666; margin-top: 2px; }
   .badge {
     display: inline-block; padding: 3px 10px; border-radius: 20px;
@@ -124,7 +126,7 @@
   .badge-naranja { background: #ffe8cc; color: #c96a00; }
   .badge-rojo { background: #ffd6d6; color: #c9302c; }
   .badge-gris { background: #e5e5ea; color: #666; }
-  .prestamo-acciones { margin-top: 8px; }
+  .prestamo-acciones { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
 
   .fila-doble { display: flex; gap: 10px; }
   .fila-doble > div { flex: 1; }
@@ -210,31 +212,41 @@
 <div class="modal-overlay" id="modalPrestamo">
   <div class="modal-content">
     <div class="modal-header">
-      <h3>Nuevo préstamo</h3>
+      <h3 id="modalTituloPrestamo">Nuevo préstamo</h3>
       <button class="modal-close" onclick="cerrarModalPrestamo()">✕</button>
     </div>
+
+    <input type="hidden" id="prestamoId">
 
     <label>Cliente</label>
     <select id="prestamoCliente"></select>
 
     <div class="fila-doble">
       <div>
-        <label>Monto prestado</label>
+        <label>Capital prestado</label>
         <input type="number" id="prestamoMonto" placeholder="Ej. 5000" oninput="actualizarTotalPreview()">
       </div>
       <div>
-        <label>% de interés</label>
+        <label>% de interés por período</label>
         <input type="number" id="prestamoInteres" placeholder="Ej. 20" oninput="actualizarTotalPreview()">
       </div>
     </div>
 
-    <div class="total-preview" id="totalPreview">Total a pagar: $0</div>
+    <label>Frecuencia de cobro</label>
+    <select id="prestamoFrecuencia" onchange="actualizarTotalPreview()">
+      <option value="diario">Diario</option>
+      <option value="semanal">Semanal</option>
+      <option value="quincenal">Quincenal</option>
+      <option value="mensual">Mensual</option>
+    </select>
 
-    <label>Fecha de vencimiento (próximo cobro)</label>
+    <div class="total-preview" id="totalPreview">Interés por período: $0</div>
+
+    <label>Fecha del próximo pago</label>
     <input type="date" id="prestamoFecha">
 
     <label>Notas (opcional)</label>
-    <input type="text" id="prestamoNotas" placeholder="Ej. cobro semanal, plazo 30 días...">
+    <input type="text" id="prestamoNotas" placeholder="Notas adicionales...">
 
     <button class="btn-primary" id="btnGuardarPrestamo" onclick="guardarPrestamo()">Guardar préstamo</button>
   </div>
@@ -268,6 +280,10 @@
   let prestamosCache = [];
   let archivoFotoSeleccionado = null;
   let fotoUrlActual = null;
+
+  const NOMBRES_FRECUENCIA = {
+    diario: 'Diario', semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual'
+  };
 
   // --- Navegación de pestañas ---
   window.cambiarSeccion = function (nombre) {
@@ -383,217 +399,3 @@
 
   window.eliminarCliente = async function (id) {
     if (!confirm('¿Eliminar este cliente?')) return;
-    try {
-      await deleteDoc(doc(db, 'clientes', id));
-    } catch (error) {
-      alert('Error al eliminar: ' + error.message);
-    }
-  };
-
-  const qClientes = query(collection(db, 'clientes'), orderBy('fechaCreacion', 'desc'));
-  onSnapshot(qClientes, (snapshot) => {
-    clientesCache = [];
-    snapshot.forEach(docSnap => {
-      clientesCache.push({ id: docSnap.id, ...docSnap.data() });
-    });
-    renderizarClientes();
-    llenarSelectClientes();
-  });
-
-  function renderizarClientes() {
-    const contenedor = document.getElementById('listaClientes');
-    if (clientesCache.length === 0) {
-      contenedor.innerHTML = '<div class="empty-msg">Aún no hay clientes. Toca + para agregar uno.</div>';
-      return;
-    }
-    contenedor.innerHTML = clientesCache.map(c => `
-      <div class="cliente-item">
-        <img class="cliente-foto" src="${c.fotoURL || ''}" onerror="this.style.background='#ddd'">
-        <div class="cliente-info">
-          <div class="cliente-nombre">${c.nombre}</div>
-          <div class="cliente-tel">${c.telefono || 'Sin teléfono'}</div>
-        </div>
-        <button class="btn-edit" onclick="editarCliente('${c.id}')">Editar</button>
-        <button class="btn-danger" onclick="eliminarCliente('${c.id}')">Eliminar</button>
-      </div>
-    `).join('');
-  }
-
-  function llenarSelectClientes() {
-    const select = document.getElementById('prestamoCliente');
-    if (clientesCache.length === 0) {
-      select.innerHTML = '<option value="">Primero agrega un cliente</option>';
-      return;
-    }
-    select.innerHTML = clientesCache.map(c =>
-      `<option value="${c.id}">${c.nombre}</option>`
-    ).join('');
-  }
-
-  // ===================== PRESTAMOS =====================
-
-  window.abrirModalPrestamo = function () {
-    if (clientesCache.length === 0) {
-      alert('Primero agrega al menos un cliente.');
-      return;
-    }
-    document.getElementById('prestamoMonto').value = '';
-    document.getElementById('prestamoInteres').value = '';
-    document.getElementById('prestamoFecha').value = '';
-    document.getElementById('prestamoNotas').value = '';
-    document.getElementById('totalPreview').textContent = 'Total a pagar: $0';
-    document.getElementById('modalPrestamo').classList.add('active');
-  };
-
-  window.cerrarModalPrestamo = function () {
-    document.getElementById('modalPrestamo').classList.remove('active');
-  };
-
-  window.actualizarTotalPreview = function () {
-    const monto = parseFloat(document.getElementById('prestamoMonto').value) || 0;
-    const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
-    const total = monto + (monto * interes / 100);
-    document.getElementById('totalPreview').innerHTML =
-      `Total a pagar: <strong>$${total.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong>`;
-  };
-
-  window.guardarPrestamo = async function () {
-    const clienteId = document.getElementById('prestamoCliente').value;
-    const monto = parseFloat(document.getElementById('prestamoMonto').value);
-    const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
-    const fechaVencimiento = document.getElementById('prestamoFecha').value;
-    const notas = document.getElementById('prestamoNotas').value.trim();
-
-    if (!clienteId || !monto || !fechaVencimiento) {
-      alert('Completa cliente, monto y fecha de vencimiento.');
-      return;
-    }
-
-    const montoTotal = monto + (monto * interes / 100);
-    const cliente = clientesCache.find(c => c.id === clienteId);
-    const boton = document.getElementById('btnGuardarPrestamo');
-    boton.disabled = true;
-    boton.textContent = 'Guardando...';
-
-    try {
-      await addDoc(collection(db, 'prestamos'), {
-        clienteId,
-        clienteNombre: cliente ? cliente.nombre : 'Cliente',
-        monto,
-        interes,
-        montoTotal,
-        fechaVencimiento,
-        notas,
-        estado: 'activo',
-        fechaCreacion: Date.now()
-      });
-      cerrarModalPrestamo();
-    } catch (error) {
-      alert('Error al guardar: ' + error.message);
-    } finally {
-      boton.disabled = false;
-      boton.textContent = 'Guardar préstamo';
-    }
-  };
-
-  window.marcarPagado = async function (id) {
-    try {
-      await updateDoc(doc(db, 'prestamos', id), { estado: 'pagado' });
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
-  };
-
-  window.eliminarPrestamo = async function (id) {
-    if (!confirm('¿Eliminar este préstamo?')) return;
-    try {
-      await deleteDoc(doc(db, 'prestamos', id));
-    } catch (error) {
-      alert('Error al eliminar: ' + error.message);
-    }
-  };
-
-  const qPrestamos = query(collection(db, 'prestamos'), orderBy('fechaVencimiento', 'asc'));
-  onSnapshot(qPrestamos, (snapshot) => {
-    prestamosCache = [];
-    snapshot.forEach(docSnap => {
-      prestamosCache.push({ id: docSnap.id, ...docSnap.data() });
-    });
-    renderizarPrestamos();
-  });
-
-  function calcularEstadoFecha(fechaVencimiento) {
-    const hoy = new Date();
-    hoy.setHours(0,0,0,0);
-    const vence = new Date(fechaVencimiento + 'T00:00:00');
-    const diffDias = Math.round((vence - hoy) / (1000 * 60 * 60 * 24));
-    if (diffDias < 0) return 'atrasado';
-    if (diffDias === 0) return 'hoy';
-    return 'aldia';
-  }
-
-  function renderizarPrestamos() {
-    const contenedor = document.getElementById('listaPrestamos');
-    const alerta = document.getElementById('alertaCobros');
-
-    if (prestamosCache.length === 0) {
-      contenedor.innerHTML = '<div class="empty-msg">Aún no hay préstamos. Toca + para agregar uno.</div>';
-      alerta.classList.add('vacia');
-      return;
-    }
-
-    const activos = prestamosCache.filter(p => p.estado !== 'pagado');
-    const atrasados = activos.filter(p => calcularEstadoFecha(p.fechaVencimiento) === 'atrasado');
-    const hoy = activos.filter(p => calcularEstadoFecha(p.fechaVencimiento) === 'hoy');
-
-    if (atrasados.length === 0 && hoy.length === 0) {
-      alerta.classList.add('vacia');
-    } else {
-      alerta.classList.remove('vacia');
-      let texto = '';
-      if (atrasados.length > 0) {
-        texto += `⚠️ <strong>${atrasados.length} cliente(s) atrasado(s):</strong> ` +
-          atrasados.map(p => p.clienteNombre).join(', ') + '. ';
-      }
-      if (hoy.length > 0) {
-        texto += `📅 <strong>${hoy.length} cobro(s) vence(n) hoy:</strong> ` +
-          hoy.map(p => p.clienteNombre).join(', ') + '.';
-      }
-      alerta.innerHTML = texto;
-    }
-
-    contenedor.innerHTML = prestamosCache.map(p => {
-      let badge = '';
-      if (p.estado === 'pagado') {
-        badge = '<span class="badge badge-gris">Pagado</span>';
-      } else {
-        const estado = calcularEstadoFecha(p.fechaVencimiento);
-        if (estado === 'atrasado') badge = '<span class="badge badge-rojo">Atrasado</span>';
-        else if (estado === 'hoy') badge = '<span class="badge badge-naranja">Vence hoy</span>';
-        else badge = '<span class="badge badge-verde">Al día</span>';
-      }
-
-      const totalMostrar = p.montoTotal != null ? p.montoTotal : p.monto;
-      const detalleInteres = p.interes ? `Capital: $${Number(p.monto).toLocaleString()} + ${p.interes}% interés` : '';
-
-      return `
-        <div class="prestamo-item">
-          <div class="prestamo-top">
-            <div class="prestamo-nombre">${p.clienteNombre}</div>
-            <div class="prestamo-monto">$${Number(totalMostrar).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-          </div>
-          ${detalleInteres ? `<div class="prestamo-detalle">${detalleInteres}</div>` : ''}
-          <div class="prestamo-fecha">Vence: ${p.fechaVencimiento}${p.notas ? ' · ' + p.notas : ''}</div>
-          ${badge}
-          <div class="prestamo-acciones">
-            ${p.estado !== 'pagado' ? `<button class="btn-ok" onclick="marcarPagado('${p.id}')">Marcar pagado</button>` : ''}
-            <button class="btn-danger" onclick="eliminarPrestamo('${p.id}')">Eliminar</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-</script>
-
-</body>
-</html>
