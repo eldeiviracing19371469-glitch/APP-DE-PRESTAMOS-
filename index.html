@@ -135,6 +135,33 @@
     font-size: 14px; margin-bottom: 12px; color: #1c1c1e;
   }
   .total-preview strong { color: #007aff; }
+
+  .resumen-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
+  }
+  .resumen-box {
+    background: white; border-radius: 12px; padding: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .resumen-box.full { grid-column: 1 / -1; }
+  .resumen-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .resumen-valor { font-size: 19px; font-weight: 700; }
+  .resumen-valor.azul { color: #007aff; }
+  .resumen-valor.verde { color: #1a7d3c; }
+  .resumen-valor.naranja { color: #c96a00; }
+
+  .pago-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 0; border-bottom: 1px solid #eee;
+  }
+  .pago-item:last-child { border-bottom: none; }
+  .pago-info { flex: 1; }
+  .pago-nombre { font-weight: 600; font-size: 14px; }
+  .pago-detalle { font-size: 12px; color: #666; margin-top: 2px; }
+  .pago-monto { font-weight: 700; font-size: 15px; margin-right: 10px; }
+  .pago-monto.interes { color: #c96a00; }
+  .pago-monto.capital { color: #1a7d3c; }
+  .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
 </style>
 </head>
 <body>
@@ -157,8 +184,25 @@
     </div>
   </div>
 
-  <div id="seccionPagos" class="card" style="display:none;">
-    <p>Aquí irá el módulo de Pagos.</p>
+  <div id="seccionPagos" style="display:none;">
+    <div class="resumen-grid">
+      <div class="resumen-box">
+        <div class="resumen-label">Capital invertido (activo)</div>
+        <div class="resumen-valor azul" id="resCapitalInvertido">$0</div>
+      </div>
+      <div class="resumen-box">
+        <div class="resumen-label">Capital recuperado</div>
+        <div class="resumen-valor verde" id="resCapitalRecuperado">$0</div>
+      </div>
+      <div class="resumen-box full">
+        <div class="resumen-label">Ganancias totales (interés cobrado)</div>
+        <div class="resumen-valor naranja" id="resGanancias">$0</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="seccion-titulo">Historial de pagos</div>
+      <div id="listaPagos"></div>
+    </div>
   </div>
 </main>
 
@@ -278,6 +322,7 @@
 
   let clientesCache = [];
   let prestamosCache = [];
+  let pagosCache = [];
   let archivoFotoSeleccionado = null;
   let fotoUrlActual = null;
 
@@ -553,11 +598,23 @@
   window.pagarInteres = async function (id) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
-    const montoInteres = (p.saldoCapital * p.interesPorcentaje / 100).toLocaleString(undefined, {maximumFractionDigits: 2});
-    if (!confirm(`¿Confirmar pago de interés de $${montoInteres}? La fecha de próximo cobro avanzará.`)) return;
+    const montoInteres = p.saldoCapital * p.interesPorcentaje / 100;
+    if (!confirm(`¿Confirmar pago de interés de $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}? La fecha de próximo cobro avanzará.`)) return;
     try {
+      const fechaAnterior = p.fechaProximoPago;
       const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia);
       await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha });
+      await addDoc(collection(db, 'pagos'), {
+        prestamoId: id,
+        clienteId: p.clienteId,
+        clienteNombre: p.clienteNombre,
+        tipo: 'interes',
+        monto: montoInteres,
+        frecuencia: p.frecuencia,
+        fechaAnterior,
+        fechaNueva: nuevaFecha,
+        fechaPago: Date.now()
+      });
     } catch (error) {
       alert('Error: ' + error.message);
     }
@@ -569,10 +626,20 @@
     const abono = parseFloat(prompt(`Capital pendiente: $${p.saldoCapital}\n¿Cuánto capital va a pagar?`));
     if (!abono || abono <= 0) return;
     const nuevoSaldo = Math.max(0, p.saldoCapital - abono);
+    const estadoAnterior = p.estado;
     try {
       await updateDoc(doc(db, 'prestamos', id), {
         saldoCapital: nuevoSaldo,
         estado: nuevoSaldo === 0 ? 'pagado' : 'activo'
+      });
+      await addDoc(collection(db, 'pagos'), {
+        prestamoId: id,
+        clienteId: p.clienteId,
+        clienteNombre: p.clienteNombre,
+        tipo: 'capital',
+        monto: abono,
+        estadoAnterior,
+        fechaPago: Date.now()
       });
     } catch (error) {
       alert('Error: ' + error.message);
@@ -595,6 +662,7 @@
       prestamosCache.push({ id: docSnap.id, ...docSnap.data() });
     });
     renderizarPrestamos();
+    renderizarResumen();
   });
 
   function calcularEstadoFecha(fechaProximoPago) {
@@ -673,6 +741,90 @@
       `;
     }).join('');
   }
+
+  // ===================== PAGOS / RESUMEN =====================
+
+  const qPagos = query(collection(db, 'pagos'), orderBy('fechaPago', 'desc'));
+  onSnapshot(qPagos, (snapshot) => {
+    pagosCache = [];
+    snapshot.forEach(docSnap => {
+      pagosCache.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderizarPagos();
+    renderizarResumen();
+  });
+
+  function renderizarResumen() {
+    const capitalInvertido = prestamosCache
+      .filter(p => p.estado !== 'pagado')
+      .reduce((sum, p) => sum + Number(p.saldoCapital || 0), 0);
+
+    const capitalRecuperado = pagosCache
+      .filter(p => p.tipo === 'capital')
+      .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
+    const ganancias = pagosCache
+      .filter(p => p.tipo === 'interes')
+      .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
+    document.getElementById('resCapitalInvertido').textContent =
+      '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
+    document.getElementById('resCapitalRecuperado').textContent =
+      '$' + capitalRecuperado.toLocaleString(undefined, {maximumFractionDigits: 2});
+    document.getElementById('resGanancias').textContent =
+      '$' + ganancias.toLocaleString(undefined, {maximumFractionDigits: 2});
+  }
+
+  function renderizarPagos() {
+    const contenedor = document.getElementById('listaPagos');
+    if (pagosCache.length === 0) {
+      contenedor.innerHTML = '<div class="empty-msg">Aún no hay pagos registrados.</div>';
+      return;
+    }
+    contenedor.innerHTML = pagosCache.map(p => {
+      const fecha = new Date(p.fechaPago);
+      const fechaTexto = fecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
+      const tipoTexto = p.tipo === 'interes' ? 'Pago de interés' : 'Abono a capital';
+      return `
+        <div class="pago-item">
+          <div class="pago-info">
+            <div class="pago-nombre">${p.clienteNombre}</div>
+            <div class="pago-detalle">${tipoTexto} · ${fechaTexto}</div>
+          </div>
+          <div class="pago-monto ${p.tipo}">$${Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+          <button class="btn-danger" onclick="eliminarPago('${p.id}')">Eliminar</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.eliminarPago = async function (id) {
+    const pago = pagosCache.find(p => p.id === id);
+    if (!pago) return;
+    if (!confirm('¿Eliminar este pago del historial? Se deshará su efecto en el préstamo.')) return;
+
+    try {
+      const prestamo = prestamosCache.find(p => p.id === pago.prestamoId);
+
+      if (prestamo) {
+        if (pago.tipo === 'interes') {
+          await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
+            fechaProximoPago: pago.fechaAnterior
+          });
+        } else if (pago.tipo === 'capital') {
+          const nuevoSaldo = Number(prestamo.saldoCapital || 0) + Number(pago.monto);
+          await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
+            saldoCapital: nuevoSaldo,
+            estado: 'activo'
+          });
+        }
+      }
+
+      await deleteDoc(doc(db, 'pagos', id));
+    } catch (error) {
+      alert('Error al eliminar: ' + error.message);
+    }
+  };
 </script>
 
 </body>
