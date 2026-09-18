@@ -399,3 +399,281 @@
 
   window.eliminarCliente = async function (id) {
     if (!confirm('¿Eliminar este cliente?')) return;
+    try {
+      await deleteDoc(doc(db, 'clientes', id));
+    } catch (error) {
+      alert('Error al eliminar: ' + error.message);
+    }
+  };
+
+  const qClientes = query(collection(db, 'clientes'), orderBy('fechaCreacion', 'desc'));
+  onSnapshot(qClientes, (snapshot) => {
+    clientesCache = [];
+    snapshot.forEach(docSnap => {
+      clientesCache.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderizarClientes();
+    llenarSelectClientes();
+  });
+
+  function renderizarClientes() {
+    const contenedor = document.getElementById('listaClientes');
+    if (clientesCache.length === 0) {
+      contenedor.innerHTML = '<div class="empty-msg">Aún no hay clientes. Toca + para agregar uno.</div>';
+      return;
+    }
+    contenedor.innerHTML = clientesCache.map(c => `
+      <div class="cliente-item">
+        <img class="cliente-foto" src="${c.fotoURL || ''}" onerror="this.style.background='#ddd'">
+        <div class="cliente-info">
+          <div class="cliente-nombre">${c.nombre}</div>
+          <div class="cliente-tel">${c.telefono || 'Sin teléfono'}</div>
+        </div>
+        <button class="btn-edit" onclick="editarCliente('${c.id}')">Editar</button>
+        <button class="btn-danger" onclick="eliminarCliente('${c.id}')">Eliminar</button>
+      </div>
+    `).join('');
+  }
+
+  function llenarSelectClientes() {
+    const select = document.getElementById('prestamoCliente');
+    if (clientesCache.length === 0) {
+      select.innerHTML = '<option value="">Primero agrega un cliente</option>';
+      return;
+    }
+    select.innerHTML = clientesCache.map(c =>
+      `<option value="${c.id}">${c.nombre}</option>`
+    ).join('');
+  }
+
+  // ===================== PRESTAMOS =====================
+
+  window.abrirModalPrestamo = function () {
+    if (clientesCache.length === 0) {
+      alert('Primero agrega al menos un cliente.');
+      return;
+    }
+    document.getElementById('modalTituloPrestamo').textContent = 'Nuevo préstamo';
+    document.getElementById('prestamoId').value = '';
+    document.getElementById('prestamoCliente').disabled = false;
+    document.getElementById('prestamoMonto').value = '';
+    document.getElementById('prestamoInteres').value = '';
+    document.getElementById('prestamoFrecuencia').value = 'semanal';
+    document.getElementById('prestamoFecha').value = '';
+    document.getElementById('prestamoNotas').value = '';
+    actualizarTotalPreview();
+    document.getElementById('modalPrestamo').classList.add('active');
+  };
+
+  window.editarPrestamo = function (id) {
+    const p = prestamosCache.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('modalTituloPrestamo').textContent = 'Editar préstamo';
+    document.getElementById('prestamoId').value = p.id;
+    document.getElementById('prestamoCliente').value = p.clienteId;
+    document.getElementById('prestamoCliente').disabled = true;
+    document.getElementById('prestamoMonto').value = p.saldoCapital != null ? p.saldoCapital : p.monto;
+    document.getElementById('prestamoInteres').value = p.interesPorcentaje;
+    document.getElementById('prestamoFrecuencia').value = p.frecuencia || 'semanal';
+    document.getElementById('prestamoFecha').value = p.fechaProximoPago;
+    document.getElementById('prestamoNotas').value = p.notas || '';
+    actualizarTotalPreview();
+    document.getElementById('modalPrestamo').classList.add('active');
+  };
+
+  window.cerrarModalPrestamo = function () {
+    document.getElementById('modalPrestamo').classList.remove('active');
+  };
+
+  window.actualizarTotalPreview = function () {
+    const monto = parseFloat(document.getElementById('prestamoMonto').value) || 0;
+    const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
+    const frecuencia = document.getElementById('prestamoFrecuencia').value;
+    const montoInteres = monto * interes / 100;
+    document.getElementById('totalPreview').innerHTML =
+      `Interés ${NOMBRES_FRECUENCIA[frecuencia]}: <strong>$${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong>`;
+  };
+
+  function avanzarFecha(fechaStr, frecuencia) {
+    const fecha = new Date(fechaStr + 'T00:00:00');
+    if (frecuencia === 'diario') fecha.setDate(fecha.getDate() + 1);
+    else if (frecuencia === 'semanal') fecha.setDate(fecha.getDate() + 7);
+    else if (frecuencia === 'quincenal') fecha.setDate(fecha.getDate() + 15);
+    else if (frecuencia === 'mensual') fecha.setMonth(fecha.getMonth() + 1);
+    return fecha.toISOString().split('T')[0];
+  }
+
+  window.guardarPrestamo = async function () {
+    const id = document.getElementById('prestamoId').value;
+    const clienteId = document.getElementById('prestamoCliente').value;
+    const monto = parseFloat(document.getElementById('prestamoMonto').value);
+    const interesPorcentaje = parseFloat(document.getElementById('prestamoInteres').value) || 0;
+    const frecuencia = document.getElementById('prestamoFrecuencia').value;
+    const fechaProximoPago = document.getElementById('prestamoFecha').value;
+    const notas = document.getElementById('prestamoNotas').value.trim();
+
+    if (!clienteId || !monto || !fechaProximoPago) {
+      alert('Completa cliente, capital y fecha del próximo pago.');
+      return;
+    }
+
+    const cliente = clientesCache.find(c => c.id === clienteId);
+    const boton = document.getElementById('btnGuardarPrestamo');
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+
+    try {
+      if (id) {
+        await updateDoc(doc(db, 'prestamos', id), {
+          interesPorcentaje, frecuencia, fechaProximoPago, notas
+        });
+      } else {
+        await addDoc(collection(db, 'prestamos'), {
+          clienteId,
+          clienteNombre: cliente ? cliente.nombre : 'Cliente',
+          monto,
+          saldoCapital: monto,
+          interesPorcentaje,
+          frecuencia,
+          fechaProximoPago,
+          notas,
+          estado: 'activo',
+          fechaCreacion: Date.now()
+        });
+      }
+      cerrarModalPrestamo();
+    } catch (error) {
+      alert('Error al guardar: ' + error.message);
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Guardar préstamo';
+    }
+  };
+
+  window.pagarInteres = async function (id) {
+    const p = prestamosCache.find(x => x.id === id);
+    if (!p) return;
+    const montoInteres = (p.saldoCapital * p.interesPorcentaje / 100).toLocaleString(undefined, {maximumFractionDigits: 2});
+    if (!confirm(`¿Confirmar pago de interés de $${montoInteres}? La fecha de próximo cobro avanzará.`)) return;
+    try {
+      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia);
+      await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha });
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
+  window.abonarCapital = async function (id) {
+    const p = prestamosCache.find(x => x.id === id);
+    if (!p) return;
+    const abono = parseFloat(prompt(`Capital pendiente: $${p.saldoCapital}\n¿Cuánto capital va a pagar?`));
+    if (!abono || abono <= 0) return;
+    const nuevoSaldo = Math.max(0, p.saldoCapital - abono);
+    try {
+      await updateDoc(doc(db, 'prestamos', id), {
+        saldoCapital: nuevoSaldo,
+        estado: nuevoSaldo === 0 ? 'pagado' : 'activo'
+      });
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
+  window.eliminarPrestamo = async function (id) {
+    if (!confirm('¿Eliminar este préstamo?')) return;
+    try {
+      await deleteDoc(doc(db, 'prestamos', id));
+    } catch (error) {
+      alert('Error al eliminar: ' + error.message);
+    }
+  };
+
+  const qPrestamos = query(collection(db, 'prestamos'), orderBy('fechaProximoPago', 'asc'));
+  onSnapshot(qPrestamos, (snapshot) => {
+    prestamosCache = [];
+    snapshot.forEach(docSnap => {
+      prestamosCache.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderizarPrestamos();
+  });
+
+  function calcularEstadoFecha(fechaProximoPago) {
+    const hoy = new Date();
+    hoy.setHours(0,0,0,0);
+    const vence = new Date(fechaProximoPago + 'T00:00:00');
+    const diffDias = Math.round((vence - hoy) / (1000 * 60 * 60 * 24));
+    if (diffDias < 0) return 'atrasado';
+    if (diffDias === 0) return 'hoy';
+    return 'aldia';
+  }
+
+  function renderizarPrestamos() {
+    const contenedor = document.getElementById('listaPrestamos');
+    const alerta = document.getElementById('alertaCobros');
+
+    if (prestamosCache.length === 0) {
+      contenedor.innerHTML = '<div class="empty-msg">Aún no hay préstamos. Toca + para agregar uno.</div>';
+      alerta.classList.add('vacia');
+      return;
+    }
+
+    const activos = prestamosCache.filter(p => p.estado !== 'pagado');
+    const atrasados = activos.filter(p => calcularEstadoFecha(p.fechaProximoPago) === 'atrasado');
+    const hoy = activos.filter(p => calcularEstadoFecha(p.fechaProximoPago) === 'hoy');
+
+    if (atrasados.length === 0 && hoy.length === 0) {
+      alerta.classList.add('vacia');
+    } else {
+      alerta.classList.remove('vacia');
+      let texto = '';
+      if (atrasados.length > 0) {
+        texto += `⚠️ <strong>${atrasados.length} cliente(s) atrasado(s):</strong> ` +
+          atrasados.map(p => p.clienteNombre).join(', ') + '. ';
+      }
+      if (hoy.length > 0) {
+        texto += `📅 <strong>${hoy.length} cobro(s) vence(n) hoy:</strong> ` +
+          hoy.map(p => p.clienteNombre).join(', ') + '.';
+      }
+      alerta.innerHTML = texto;
+    }
+
+    contenedor.innerHTML = prestamosCache.map(p => {
+      let badge = '';
+      if (p.estado === 'pagado') {
+        badge = '<span class="badge badge-gris">Pagado</span>';
+      } else {
+        const estado = calcularEstadoFecha(p.fechaProximoPago);
+        if (estado === 'atrasado') badge = '<span class="badge badge-rojo">Atrasado</span>';
+        else if (estado === 'hoy') badge = '<span class="badge badge-naranja">Vence hoy</span>';
+        else badge = '<span class="badge badge-verde">Al día</span>';
+      }
+
+      const montoInteres = (p.saldoCapital * p.interesPorcentaje / 100);
+      const frecLabel = NOMBRES_FRECUENCIA[p.frecuencia] || p.frecuencia;
+
+      return `
+        <div class="prestamo-item">
+          <div class="prestamo-top">
+            <div class="prestamo-nombre">${p.clienteNombre}</div>
+            <div class="prestamo-monto">$${Number(p.saldoCapital).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+          </div>
+          <div class="prestamo-detalle">Capital pendiente · ${p.interesPorcentaje}% ${frecLabel.toLowerCase()}</div>
+          ${p.estado !== 'pagado' ? `<div class="prestamo-interes-linea">Interés de este período: $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>` : ''}
+          <div class="prestamo-fecha">Próximo pago: ${p.fechaProximoPago}${p.notas ? ' · ' + p.notas : ''}</div>
+          ${badge}
+          <div class="prestamo-acciones">
+            ${p.estado !== 'pagado' ? `
+              <button class="btn-interes" onclick="pagarInteres('${p.id}')">Pagar interés</button>
+              <button class="btn-ok" onclick="abonarCapital('${p.id}')">Abonar capital</button>
+              <button class="btn-edit" onclick="editarPrestamo('${p.id}')">Editar</button>
+            ` : ''}
+            <button class="btn-danger" onclick="eliminarPrestamo('${p.id}')">Eliminar</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+</script>
+
+</body>
+</html>
