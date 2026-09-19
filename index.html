@@ -4,113 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Préstamos</title>
-<link rel="manifest" href="manifest.json">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, Arial, sans-serif;
-    background: #f2f2f7;
-    color: #1c1c1e;
-  }
-  header.topbar {
-    background: white; padding: 16px 20px;
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid #e0e0e0;
-  }
+  body { font-family: -apple-system, Arial, sans-serif; background: #f2f2f7; color: #1c1c1e; }
+  header.topbar { background: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; }
   header.topbar h2 { font-size: 18px; }
   main { padding: 20px; padding-bottom: 90px; }
-
-  nav.tabbar {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    background: white; border-top: 1px solid #e0e0e0;
-    display: flex; justify-content: space-around; padding: 10px 0;
-  }
-  nav.tabbar button {
-    background: none; border: none; font-size: 13px;
-    color: #8e8e93; display: flex; flex-direction: column; align-items: center;
-  }
+  nav.tabbar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-around; padding: 10px 0; }
+  nav.tabbar button { background: none; border: none; font-size: 13px; color: #8e8e93; display: flex; flex-direction: column; align-items: center; }
   nav.tabbar button.active { color: #007aff; }
   nav.tabbar span.icon { font-size: 22px; margin-bottom: 2px; }
-
-  .card {
-    background: white; border-radius: 12px; padding: 18px;
-    margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  }
-
-  .btn-primary {
-    width: 100%; padding: 14px; border: none; border-radius: 10px;
-    background: #007aff; color: white; font-size: 16px; font-weight: 600;
-    margin-top: 10px;
-  }
+  .card { background: white; border-radius: 12px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .btn-primary { width: 100%; padding: 14px; border: none; border-radius: 10px; background: #007aff; color: white; font-size: 16px; font-weight: 600; margin-top: 10px; }
   .btn-danger { color: #ff3b30; background: none; border: none; font-size: 14px; }
   .btn-edit { color: #007aff; background: none; border: none; font-size: 14px; margin-right: 12px; }
   .btn-ok { color: #34c759; background: none; border: none; font-size: 14px; margin-right: 12px; }
   .btn-interes { color: #c96a00; background: none; border: none; font-size: 14px; margin-right: 12px; }
-
-  input, textarea, select {
-    width: 100%; padding: 12px; margin-bottom: 10px;
-    border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
-  }
+  input, textarea, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
   label { font-size: 13px; color: #666; display: block; margin-bottom: 4px; }
-
-  .fab {
-    position: fixed; bottom: 90px; right: 20px;
-    width: 56px; height: 56px; border-radius: 50%;
-    background: #007aff; color: white; font-size: 28px;
-    border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  }
-
-  .cliente-item {
-    display: flex; align-items: center; padding: 12px 0;
-    border-bottom: 1px solid #eee;
-  }
+  .fab { position: fixed; bottom: 90px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #007aff; color: white; font-size: 28px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .cliente-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
   .cliente-item:last-child { border-bottom: none; }
-  .cliente-foto {
-    width: 48px; height: 48px; border-radius: 8px; object-fit: cover;
-    background: #ddd; margin-right: 12px; flex-shrink: 0;
-  }
+  .cliente-foto { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: #ddd; margin-right: 12px; flex-shrink: 0; }
   .cliente-info { flex: 1; }
   .cliente-nombre { font-weight: 600; font-size: 15px; }
   .cliente-tel { font-size: 13px; color: #666; }
-
-  .modal-overlay {
-    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.4); z-index: 100;
-    align-items: flex-end; justify-content: center;
-  }
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: flex-end; justify-content: center; }
   .modal-overlay.active { display: flex; }
-  .modal-content {
-    background: white; width: 100%; max-width: 480px;
-    border-radius: 16px 16px 0 0; padding: 20px;
-    max-height: 90vh; overflow-y: auto;
-  }
-  .modal-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 16px;
-  }
+  .modal-content { background: white; width: 100%; max-width: 480px; border-radius: 16px 16px 0 0; padding: 20px; max-height: 90vh; overflow-y: auto; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .modal-close { font-size: 22px; background: none; border: none; color: #666; }
-
-  .preview-foto {
-    width: 100%; max-width: 200px; height: 140px; object-fit: cover;
-    border-radius: 10px; margin-bottom: 10px; display: none;
-    background: #eee;
-  }
-  .btn-foto {
-    width: 100%; padding: 12px; border: 1px dashed #999; border-radius: 8px;
-    background: #f7f7f7; color: #444; font-size: 14px; margin-bottom: 14px;
-  }
+  .preview-foto { width: 100%; max-width: 200px; height: 140px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; display: none; background: #eee; }
+  .btn-foto { width: 100%; padding: 12px; border: 1px dashed #999; border-radius: 8px; background: #f7f7f7; color: #444; font-size: 14px; margin-bottom: 14px; }
   .empty-msg { text-align: center; color: #999; padding: 30px 0; font-size: 14px; }
-
-  .alerta-cobros {
-    background: #fff3cd; border: 1px solid #ffe08a; border-radius: 12px;
-    padding: 14px 16px; margin-bottom: 14px; font-size: 14px;
-  }
+  .alerta-cobros { background: #fff3cd; border: 1px solid #ffe08a; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; font-size: 14px; }
   .alerta-cobros.vacia { display: none; }
   .alerta-cobros strong { display: block; margin-bottom: 4px; }
-
-  .prestamo-item {
-    padding: 14px 0; border-bottom: 1px solid #eee;
-  }
+  .prestamo-item { padding: 14px 0; border-bottom: 1px solid #eee; }
   .prestamo-item:last-child { border-bottom: none; }
   .prestamo-top { display: flex; justify-content: space-between; align-items: center; }
   .prestamo-nombre { font-weight: 600; font-size: 15px; }
@@ -119,44 +49,25 @@
   .prestamo-interes-linea { font-size: 13px; color: #c96a00; margin-top: 4px; font-weight: 600; }
   .prestamo-atraso-linea { font-size: 12px; color: #c9302c; margin-top: 2px; font-weight: 600; }
   .prestamo-fecha { font-size: 13px; color: #666; margin-top: 2px; }
-  .badge {
-    display: inline-block; padding: 3px 10px; border-radius: 20px;
-    font-size: 12px; font-weight: 600; margin-top: 6px;
-  }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-top: 6px; }
   .badge-verde { background: #d4f4dd; color: #1a7d3c; }
   .badge-naranja { background: #ffe8cc; color: #c96a00; }
   .badge-rojo { background: #ffd6d6; color: #c9302c; }
   .badge-gris { background: #e5e5ea; color: #666; }
   .prestamo-acciones { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
-
-  .fila-doble { display: flex; gap: 10px; }
-  .fila-doble > div { flex: 1; }
   .fila-triple { display: flex; gap: 8px; }
   .fila-triple > div { flex: 1; }
-  .total-preview {
-    background: #f0f7ff; border-radius: 8px; padding: 10px 12px;
-    font-size: 14px; margin-bottom: 12px; color: #1c1c1e; line-height: 1.6;
-  }
+  .total-preview { background: #f0f7ff; border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; color: #1c1c1e; line-height: 1.6; }
   .total-preview strong { color: #007aff; }
-
-  .resumen-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
-  }
-  .resumen-box {
-    background: white; border-radius: 12px; padding: 14px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  }
+  .resumen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .resumen-box { background: white; border-radius: 12px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
   .resumen-box.full { grid-column: 1 / -1; }
   .resumen-label { font-size: 12px; color: #888; margin-bottom: 4px; }
   .resumen-valor { font-size: 19px; font-weight: 700; }
   .resumen-valor.azul { color: #007aff; }
   .resumen-valor.verde { color: #1a7d3c; }
   .resumen-valor.naranja { color: #c96a00; }
-
-  .pago-item {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 0; border-bottom: 1px solid #eee;
-  }
+  .pago-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
   .pago-item:last-child { border-bottom: none; }
   .pago-info { flex: 1; }
   .pago-nombre { font-weight: 600; font-size: 14px; }
@@ -165,66 +76,37 @@
   .pago-monto.interes { color: #c96a00; }
   .pago-monto.cuota { color: #1a7d3c; }
   .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
-
-  /* RECIBO */
   #reciboImprimir { display: none; }
-  .recibo-linea {
-    display: flex; justify-content: space-between; padding: 8px 0;
-    border-bottom: 1px dashed #ddd; font-size: 14px;
-  }
+  .recibo-linea { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #ddd; font-size: 14px; }
   .recibo-linea strong { text-align: right; }
-  .recibo-total {
-    display: flex; justify-content: space-between; padding: 12px 0;
-    font-size: 17px; font-weight: 700; border-top: 2px solid #333; margin-top: 6px;
-  }
+  .recibo-total { display: flex; justify-content: space-between; padding: 12px 0; font-size: 17px; font-weight: 700; border-top: 2px solid #333; margin-top: 6px; }
   .recibo-titulo { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
   .recibo-sub { text-align: center; font-size: 12px; color: #888; margin-bottom: 16px; }
-
   @media print {
     body * { visibility: hidden; }
     #reciboImprimir, #reciboImprimir * { visibility: visible; }
-    #reciboImprimir {
-      display: block !important;
-      position: absolute; top: 0; left: 0; width: 100%; padding: 20px;
-    }
+    #reciboImprimir { display: block !important; position: absolute; top: 0; left: 0; width: 100%; padding: 20px; }
     .no-imprimir { display: none !important; }
   }
 </style>
 </head>
 <body>
 
-<header class="topbar">
-  <h2 id="tituloSeccion">Clientes</h2>
-</header>
+<header class="topbar"><h2 id="tituloSeccion">Clientes</h2></header>
 
 <main>
   <div id="seccionClientes">
-    <div class="card" id="listaClientesCard">
-      <div id="listaClientes"></div>
-    </div>
+    <div class="card"><div id="listaClientes"></div></div>
   </div>
-
   <div id="seccionPrestamos" style="display:none;">
     <div class="alerta-cobros" id="alertaCobros"></div>
-    <div class="card">
-      <div id="listaPrestamos"></div>
-    </div>
+    <div class="card"><div id="listaPrestamos"></div></div>
   </div>
-
   <div id="seccionPagos" style="display:none;">
     <div class="resumen-grid">
-      <div class="resumen-box">
-        <div class="resumen-label">Capital invertido (activo)</div>
-        <div class="resumen-valor azul" id="resCapitalInvertido">$0</div>
-      </div>
-      <div class="resumen-box">
-        <div class="resumen-label">Capital recuperado</div>
-        <div class="resumen-valor verde" id="resCapitalRecuperado">$0</div>
-      </div>
-      <div class="resumen-box full">
-        <div class="resumen-label">Ganancias totales (interés cobrado)</div>
-        <div class="resumen-valor naranja" id="resGanancias">$0</div>
-      </div>
+      <div class="resumen-box"><div class="resumen-label">Capital invertido (activo)</div><div class="resumen-valor azul" id="resCapitalInvertido">$0</div></div>
+      <div class="resumen-box"><div class="resumen-label">Capital recuperado</div><div class="resumen-valor verde" id="resCapitalRecuperado">$0</div></div>
+      <div class="resumen-box full"><div class="resumen-label">Ganancias totales (interés cobrado)</div><div class="resumen-valor naranja" id="resGanancias">$0</div></div>
     </div>
     <div class="card">
       <div class="seccion-titulo">Historial de pagos</div>
@@ -237,76 +119,42 @@
 <button class="fab" id="btnAgregarPrestamo" style="display:none;" onclick="abrirModalPrestamo()">+</button>
 
 <nav class="tabbar">
-  <button onclick="cambiarSeccion('Clientes')" class="active" id="tabClientes">
-    <span class="icon">👤</span>Clientes
-  </button>
-  <button onclick="cambiarSeccion('Prestamos')" id="tabPrestamos">
-    <span class="icon">💵</span>Préstamos
-  </button>
-  <button onclick="cambiarSeccion('Pagos')" id="tabPagos">
-    <span class="icon">📄</span>Pagos
-  </button>
+  <button onclick="cambiarSeccion('Clientes')" class="active" id="tabClientes"><span class="icon">👤</span>Clientes</button>
+  <button onclick="cambiarSeccion('Prestamos')" id="tabPrestamos"><span class="icon">💵</span>Préstamos</button>
+  <button onclick="cambiarSeccion('Pagos')" id="tabPagos"><span class="icon">📄</span>Pagos</button>
 </nav>
 
-<!-- MODAL CLIENTE -->
 <div class="modal-overlay" id="modalCliente">
   <div class="modal-content">
-    <div class="modal-header">
-      <h3 id="modalTitulo">Nuevo cliente</h3>
-      <button class="modal-close" onclick="cerrarModalCliente()">✕</button>
-    </div>
-
+    <div class="modal-header"><h3 id="modalTitulo">Nuevo cliente</h3><button class="modal-close" onclick="cerrarModalCliente()">✕</button></div>
     <input type="hidden" id="clienteId">
-
     <label>Nombre completo</label>
     <input type="text" id="clienteNombre" placeholder="Nombre y apellido">
-
     <label>Teléfono</label>
     <input type="tel" id="clienteTelefono" placeholder="Ej. 809-000-0000">
-
     <label>Dirección</label>
     <input type="text" id="clienteDireccion" placeholder="Dirección">
-
     <label>Cédula / Identificación</label>
     <input type="text" id="clienteCedula" placeholder="Número de identificación">
-
     <label>Foto de la identificación</label>
     <img id="previewFoto" class="preview-foto">
     <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none" onchange="previsualizarFoto(event)">
     <button class="btn-foto" onclick="document.getElementById('inputFoto').click()">📷 Tomar o subir foto</button>
-
     <button class="btn-primary" id="btnGuardarCliente" onclick="guardarCliente()">Guardar cliente</button>
   </div>
 </div>
 
-<!-- MODAL PRESTAMO -->
 <div class="modal-overlay" id="modalPrestamo">
   <div class="modal-content">
-    <div class="modal-header">
-      <h3 id="modalTituloPrestamo">Nuevo préstamo</h3>
-      <button class="modal-close" onclick="cerrarModalPrestamo()">✕</button>
-    </div>
-
+    <div class="modal-header"><h3 id="modalTituloPrestamo">Nuevo préstamo</h3><button class="modal-close" onclick="cerrarModalPrestamo()">✕</button></div>
     <input type="hidden" id="prestamoId">
-
     <label>Cliente</label>
     <select id="prestamoCliente"></select>
-
     <div class="fila-triple">
-      <div>
-        <label>Capital</label>
-        <input type="number" id="prestamoMonto" placeholder="5000" oninput="actualizarTotalPreview()">
-      </div>
-      <div>
-        <label>% interés total</label>
-        <input type="number" id="prestamoInteres" placeholder="20" oninput="actualizarTotalPreview()">
-      </div>
-      <div>
-        <label>Cant. de pagos</label>
-        <input type="number" id="prestamoCantPagos" placeholder="8" oninput="actualizarTotalPreview()">
-      </div>
+      <div><label>Capital</label><input type="number" id="prestamoMonto" placeholder="5000" oninput="actualizarTotalPreview()"></div>
+      <div><label>% interés total</label><input type="number" id="prestamoInteres" placeholder="20" oninput="actualizarTotalPreview()"></div>
+      <div><label>Cant. de pagos</label><input type="number" id="prestamoCantPagos" placeholder="8" oninput="actualizarTotalPreview()"></div>
     </div>
-
     <label>Frecuencia de cada pago</label>
     <select id="prestamoFrecuencia" onchange="actualizarTotalPreview()">
       <option value="diario">Diario</option>
@@ -314,27 +162,18 @@
       <option value="quincenal">Quincenal</option>
       <option value="mensual">Mensual</option>
     </select>
-
     <div class="total-preview" id="totalPreview">Completa los datos para ver el plan</div>
-
     <label>Fecha del primer pago</label>
     <input type="date" id="prestamoFecha">
-
     <label>Notas (opcional)</label>
     <input type="text" id="prestamoNotas" placeholder="Notas adicionales...">
-
     <button class="btn-primary" id="btnGuardarPrestamo" onclick="guardarPrestamo()">Guardar préstamo</button>
   </div>
 </div>
 
-<!-- MODAL RECIBO -->
 <div class="modal-overlay" id="modalRecibo">
   <div class="modal-content">
-    <div class="modal-header no-imprimir">
-      <h3>Recibo de pago</h3>
-      <button class="modal-close" onclick="cerrarModalRecibo()">✕</button>
-    </div>
-
+    <div class="modal-header no-imprimir"><h3>Recibo de pago</h3><button class="modal-close" onclick="cerrarModalRecibo()">✕</button></div>
     <div id="reciboContenido">
       <div class="recibo-titulo">App de Préstamos</div>
       <div class="recibo-sub" id="reciboFechaTop"></div>
@@ -346,7 +185,6 @@
       <div class="recibo-linea" id="reciboLineaProximo"><span>Próximo cobro</span><strong id="reciboProximo"></strong></div>
       <div class="recibo-total"><span>Total pagado</span><strong id="reciboMonto"></strong></div>
     </div>
-
     <button class="btn-primary no-imprimir" onclick="window.print()">🖨️ Imprimir recibo</button>
     <button class="btn-primary no-imprimir" style="background:#8e8e93;" onclick="cerrarModalRecibo()">Cerrar</button>
   </div>
@@ -355,13 +193,8 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
-    onSnapshot, orderBy, query
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import {
-    getStorage, ref, uploadBytes, getDownloadURL
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+  import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAAft1vdr3htDhVwaqPqCtybVt8evPifGY",
@@ -383,28 +216,18 @@
   let archivoFotoSeleccionado = null;
   let fotoUrlActual = null;
 
-  const NOMBRES_FRECUENCIA = {
-    diario: 'Diario', semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual'
-  };
-  const DIAS_FRECUENCIA = {
-    diario: 1, semanal: 7, quincenal: 15, mensual: 30
-  };
+  const NOMBRES_FRECUENCIA = { diario: 'Diario', semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual' };
+  const DIAS_FRECUENCIA = { diario: 1, semanal: 7, quincenal: 15, mensual: 30 };
 
-  // --- Navegación de pestañas ---
   window.cambiarSeccion = function (nombre) {
     document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
     document.querySelectorAll('nav.tabbar button').forEach(btn => btn.classList.remove('active'));
     document.getElementById('seccion' + nombre).style.display = 'block';
     document.getElementById('tab' + nombre).classList.add('active');
-    document.getElementById('tituloSeccion').textContent =
-      nombre === 'Prestamos' ? 'Préstamos' : nombre;
-    document.getElementById('btnAgregarCliente').style.display =
-      nombre === 'Clientes' ? 'block' : 'none';
-    document.getElementById('btnAgregarPrestamo').style.display =
-      nombre === 'Prestamos' ? 'block' : 'none';
+    document.getElementById('tituloSeccion').textContent = nombre === 'Prestamos' ? 'Préstamos' : nombre;
+    document.getElementById('btnAgregarCliente').style.display = nombre === 'Clientes' ? 'block' : 'none';
+    document.getElementById('btnAgregarPrestamo').style.display = nombre === 'Prestamos' ? 'block' : 'none';
   };
-
-  // ===================== CLIENTES =====================
 
   window.abrirModalCliente = function () {
     document.getElementById('modalTitulo').textContent = 'Nuevo cliente';
@@ -420,9 +243,7 @@
     document.getElementById('modalCliente').classList.add('active');
   };
 
-  window.cerrarModalCliente = function () {
-    document.getElementById('modalCliente').classList.remove('active');
-  };
+  window.cerrarModalCliente = function () { document.getElementById('modalCliente').classList.remove('active'); };
 
   window.previsualizarFoto = function (event) {
     const file = event.target.files[0];
@@ -443,41 +264,29 @@
     const telefono = document.getElementById('clienteTelefono').value.trim();
     const direccion = document.getElementById('clienteDireccion').value.trim();
     const cedula = document.getElementById('clienteCedula').value.trim();
-
-    if (!nombre) {
-      alert('El nombre es obligatorio.');
-      return;
-    }
-
+    if (!nombre) { alert('El nombre es obligatorio.'); return; }
     const boton = document.getElementById('btnGuardarCliente');
-    boton.disabled = true;
-    boton.textContent = 'Guardando...';
-
+    boton.disabled = true; boton.textContent = 'Guardando...';
     try {
       let fotoURL = fotoUrlActual || '';
-
       if (archivoFotoSeleccionado) {
         const nombreArchivo = 'clientes/' + Date.now() + '_' + archivoFotoSeleccionado.name;
         const storageRef = ref(storage, nombreArchivo);
         await uploadBytes(storageRef, archivoFotoSeleccionado);
         fotoURL = await getDownloadURL(storageRef);
       }
-
       const datos = { nombre, telefono, direccion, cedula, fotoURL };
-
       if (id) {
         await updateDoc(doc(db, 'clientes', id), datos);
       } else {
         datos.fechaCreacion = Date.now();
         await addDoc(collection(db, 'clientes'), datos);
       }
-
       cerrarModalCliente();
     } catch (error) {
       alert('Error al guardar: ' + error.message);
     } finally {
-      boton.disabled = false;
-      boton.textContent = 'Guardar cliente';
+      boton.disabled = false; boton.textContent = 'Guardar cliente';
     }
   };
 
@@ -493,30 +302,19 @@
     archivoFotoSeleccionado = null;
     fotoUrlActual = cliente.fotoURL || null;
     const img = document.getElementById('previewFoto');
-    if (cliente.fotoURL) {
-      img.src = cliente.fotoURL;
-      img.style.display = 'block';
-    } else {
-      img.style.display = 'none';
-    }
+    if (cliente.fotoURL) { img.src = cliente.fotoURL; img.style.display = 'block'; } else { img.style.display = 'none'; }
     document.getElementById('modalCliente').classList.add('active');
   };
 
   window.eliminarCliente = async function (id) {
     if (!confirm('¿Eliminar este cliente?')) return;
-    try {
-      await deleteDoc(doc(db, 'clientes', id));
-    } catch (error) {
-      alert('Error al eliminar: ' + error.message);
-    }
+    try { await deleteDoc(doc(db, 'clientes', id)); } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
 
   const qClientes = query(collection(db, 'clientes'), orderBy('fechaCreacion', 'desc'));
   onSnapshot(qClientes, (snapshot) => {
     clientesCache = [];
-    snapshot.forEach(docSnap => {
-      clientesCache.push({ id: docSnap.id, ...docSnap.data() });
-    });
+    snapshot.forEach(docSnap => { clientesCache.push({ id: docSnap.id, ...docSnap.data() }); });
     renderizarClientes();
     llenarSelectClientes();
   });
@@ -542,22 +340,12 @@
 
   function llenarSelectClientes() {
     const select = document.getElementById('prestamoCliente');
-    if (clientesCache.length === 0) {
-      select.innerHTML = '<option value="">Primero agrega un cliente</option>';
-      return;
-    }
-    select.innerHTML = clientesCache.map(c =>
-      `<option value="${c.id}">${c.nombre}</option>`
-    ).join('');
+    if (clientesCache.length === 0) { select.innerHTML = '<option value="">Primero agrega un cliente</option>'; return; }
+    select.innerHTML = clientesCache.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
   }
 
-  // ===================== PRESTAMOS =====================
-
   window.abrirModalPrestamo = function () {
-    if (clientesCache.length === 0) {
-      alert('Primero agrega al menos un cliente.');
-      return;
-    }
+    if (clientesCache.length === 0) { alert('Primero agrega al menos un cliente.'); return; }
     document.getElementById('modalTituloPrestamo').textContent = 'Nuevo préstamo';
     document.getElementById('prestamoId').value = '';
     document.getElementById('prestamoCliente').disabled = false;
@@ -588,29 +376,21 @@
     document.getElementById('modalPrestamo').classList.add('active');
   };
 
-  window.cerrarModalPrestamo = function () {
-    document.getElementById('modalPrestamo').classList.remove('active');
-  };
+  window.cerrarModalPrestamo = function () { document.getElementById('modalPrestamo').classList.remove('active'); };
 
   window.actualizarTotalPreview = function () {
     const capital = parseFloat(document.getElementById('prestamoMonto').value) || 0;
     const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
     const cantPagos = parseInt(document.getElementById('prestamoCantPagos').value) || 0;
     const frecuencia = document.getElementById('prestamoFrecuencia').value;
-
-    if (!capital || !cantPagos) {
-      document.getElementById('totalPreview').textContent = 'Completa los datos para ver el plan';
-      return;
-    }
-
+    if (!capital || !cantPagos) { document.getElementById('totalPreview').textContent = 'Completa los datos para ver el plan'; return; }
     const interesTotal = capital * interes / 100;
     const totalDeuda = capital + interesTotal;
     const cuota = totalDeuda / cantPagos;
-
     document.getElementById('totalPreview').innerHTML =
-      `Interés total: <strong>$${interesTotal.toLocaleString(undefined,{maximumFractionDigits:2})}</strong><br>` +
-      `Total a pagar: <strong>$${totalDeuda.toLocaleString(undefined,{maximumFractionDigits:2})}</strong><br>` +
-      `Plan: <strong>${cantPagos} pagos ${NOMBRES_FRECUENCIA[frecuencia].toLowerCase()}es de $${cuota.toLocaleString(undefined,{maximumFractionDigits:2})}</strong>`;
+      'Interés total: <strong>$' + interesTotal.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong><br>' +
+      'Total a pagar: <strong>$' + totalDeuda.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong><br>' +
+      'Plan: <strong>' + cantPagos + ' pagos ' + NOMBRES_FRECUENCIA[frecuencia].toLowerCase() + 'es de $' + cuota.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong>';
   };
 
   function avanzarFecha(fechaStr, frecuencia, periodos) {
@@ -625,8 +405,7 @@
   }
 
   function calcularPeriodosPendientes(fechaProximoPago, frecuencia) {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const vence = new Date(fechaProximoPago + 'T00:00:00');
     const diffDias = Math.round((hoy - vence) / (1000 * 60 * 60 * 24));
     if (diffDias <= 0) return 1;
@@ -643,53 +422,32 @@
     const frecuencia = document.getElementById('prestamoFrecuencia').value;
     const fechaProximoPago = document.getElementById('prestamoFecha').value;
     const notas = document.getElementById('prestamoNotas').value.trim();
-
-    if (!clienteId || !capital || !cantidadPagos || !fechaProximoPago) {
-      alert('Completa cliente, capital, cantidad de pagos y fecha.');
-      return;
-    }
-
+    if (!clienteId || !capital || !cantidadPagos || !fechaProximoPago) { alert('Completa cliente, capital, cantidad de pagos y fecha.'); return; }
     const cliente = clientesCache.find(c => c.id === clienteId);
     const boton = document.getElementById('btnGuardarPrestamo');
-    boton.disabled = true;
-    boton.textContent = 'Guardando...';
-
+    boton.disabled = true; boton.textContent = 'Guardando...';
     try {
       if (id) {
-        await updateDoc(doc(db, 'prestamos', id), {
-          interesPorcentaje, cantidadPagos, frecuencia, fechaProximoPago, notas
-        });
+        await updateDoc(doc(db, 'prestamos', id), { interesPorcentaje, cantidadPagos, frecuencia, fechaProximoPago, notas });
       } else {
         const interesTotal = capital * interesPorcentaje / 100;
         const totalDeuda = capital + interesTotal;
         const capitalPorCuota = capital / cantidadPagos;
         const interesPorCuota = interesTotal / cantidadPagos;
         const cuotaFija = totalDeuda / cantidadPagos;
-
         await addDoc(collection(db, 'prestamos'), {
-          clienteId,
-          clienteNombre: cliente ? cliente.nombre : 'Cliente',
-          capital,
-          interesPorcentaje,
-          cantidadPagos,
-          cuotasPagadas: 0,
-          capitalPorCuota,
-          interesPorCuota,
-          cuotaFija,
-          saldoCapitalPendiente: capital,
-          frecuencia,
-          fechaProximoPago,
-          notas,
-          estado: 'activo',
-          fechaCreacion: Date.now()
+          clienteId, clienteNombre: cliente ? cliente.nombre : 'Cliente',
+          capital, interesPorcentaje, cantidadPagos, cuotasPagadas: 0,
+          capitalPorCuota, interesPorCuota, cuotaFija,
+          saldoCapitalPendiente: capital, frecuencia, fechaProximoPago, notas,
+          estado: 'activo', fechaCreacion: Date.now()
         });
       }
       cerrarModalPrestamo();
     } catch (error) {
       alert('Error al guardar: ' + error.message);
     } finally {
-      boton.disabled = false;
-      boton.textContent = 'Guardar préstamo';
+      boton.disabled = false; boton.textContent = 'Guardar préstamo';
     }
   };
 
@@ -698,109 +456,68 @@
     if (!p) return;
     const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
     const montoInteres = periodos * p.interesPorCuota;
-    const avisoAtraso = periodos > 1 ? ` (incluye ${periodos} períodos acumulados)` : '';
-    if (!confirm(`¿Confirmar pago de solo interés de $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}${avisoAtraso}? El capital no se toca.`)) return;
+    const avisoAtraso = periodos > 1 ? ' (incluye ' + periodos + ' períodos acumulados)' : '';
+    if (!confirm('¿Confirmar pago de solo interés de $' + montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2}) + avisoAtraso + '? El capital no se toca.')) return;
     try {
       const fechaAnterior = p.fechaProximoPago;
       const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
       await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha });
       await addDoc(collection(db, 'pagos'), {
-        prestamoId: id,
-        clienteId: p.clienteId,
-        clienteNombre: p.clienteNombre,
-        tipo: 'interes',
-        monto: montoInteres,
-        periodos,
-        fechaAnterior,
-        fechaNueva: nuevaFecha,
-        fechaPago: Date.now()
+        prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
+        tipo: 'interes', monto: montoInteres, periodos, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
-      mostrarRecibo({
-        clienteNombre: p.clienteNombre,
-        tipo: 'Pago de solo interés' + (periodos > 1 ? ` (${periodos} períodos)` : ''),
-        monto: montoInteres,
-        proximoPago: nuevaFecha
-      });
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
+      mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Pago de solo interés' + (periodos > 1 ? ' (' + periodos + ' períodos)' : ''), monto: montoInteres, proximoPago: nuevaFecha });
+    } catch (error) { alert('Error: ' + error.message); }
   };
 
   window.pagarCuota = async function (id) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
-    const periodos = Math.min(
-      calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia),
-      p.cantidadPagos - p.cuotasPagadas
-    );
+    const periodos = Math.min(calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia), p.cantidadPagos - p.cuotasPagadas);
     if (periodos <= 0) return;
     const montoCapital = p.capitalPorCuota * periodos;
     const montoInteres = p.interesPorCuota * periodos;
     const montoTotal = montoCapital + montoInteres;
-    const avisoAtraso = periodos > 1 ? ` (${periodos} cuotas)` : '';
-    if (!confirm(`¿Confirmar pago de cuota${avisoAtraso} de $${montoTotal.toLocaleString(undefined, {maximumFractionDigits: 2})}?`)) return;
-
+    const avisoAtraso = periodos > 1 ? ' (' + periodos + ' cuotas)' : '';
+    if (!confirm('¿Confirmar pago de cuota' + avisoAtraso + ' de $' + montoTotal.toLocaleString(undefined, {maximumFractionDigits: 2}) + '?')) return;
     const nuevasCuotasPagadas = p.cuotasPagadas + periodos;
     const nuevoSaldoCapital = Math.max(0, p.saldoCapitalPendiente - montoCapital);
     const pagoCompleto = nuevasCuotasPagadas >= p.cantidadPagos;
-
     try {
       const fechaAnterior = p.fechaProximoPago;
       const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
       await updateDoc(doc(db, 'prestamos', id), {
-        cuotasPagadas: nuevasCuotasPagadas,
-        saldoCapitalPendiente: nuevoSaldoCapital,
-        fechaProximoPago: nuevaFecha,
-        estado: pagoCompleto ? 'pagado' : 'activo'
+        cuotasPagadas: nuevasCuotasPagadas, saldoCapitalPendiente: nuevoSaldoCapital,
+        fechaProximoPago: nuevaFecha, estado: pagoCompleto ? 'pagado' : 'activo'
       });
       await addDoc(collection(db, 'pagos'), {
-        prestamoId: id,
-        clienteId: p.clienteId,
-        clienteNombre: p.clienteNombre,
-        tipo: 'cuota',
-        monto: montoTotal,
-        montoCapital,
-        montoInteres,
-        periodos,
-        fechaAnterior,
-        fechaNueva: nuevaFecha,
-        fechaPago: Date.now()
+        prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
+        tipo: 'cuota', monto: montoTotal, montoCapital, montoInteres, periodos,
+        fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
       mostrarRecibo({
-        clienteNombre: p.clienteNombre,
-        tipo: 'Pago de cuota' + avisoAtraso,
-        monto: montoTotal,
-        cuotas: `${nuevasCuotasPagadas} de ${p.cantidadPagos}`,
-        saldo: nuevoSaldoCapital,
+        clienteNombre: p.clienteNombre, tipo: 'Pago de cuota' + avisoAtraso, monto: montoTotal,
+        cuotas: nuevasCuotasPagadas + ' de ' + p.cantidadPagos, saldo: nuevoSaldoCapital,
         proximoPago: pagoCompleto ? '—' : nuevaFecha
       });
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
+    } catch (error) { alert('Error: ' + error.message); }
   };
 
   window.eliminarPrestamo = async function (id) {
     if (!confirm('¿Eliminar este préstamo?')) return;
-    try {
-      await deleteDoc(doc(db, 'prestamos', id));
-    } catch (error) {
-      alert('Error al eliminar: ' + error.message);
-    }
+    try { await deleteDoc(doc(db, 'prestamos', id)); } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
 
   const qPrestamos = query(collection(db, 'prestamos'), orderBy('fechaProximoPago', 'asc'));
   onSnapshot(qPrestamos, (snapshot) => {
     prestamosCache = [];
-    snapshot.forEach(docSnap => {
-      prestamosCache.push({ id: docSnap.id, ...docSnap.data() });
-    });
+    snapshot.forEach(docSnap => { prestamosCache.push({ id: docSnap.id, ...docSnap.data() }); });
     renderizarPrestamos();
     renderizarResumen();
   });
 
   function calcularEstadoFecha(fechaProximoPago) {
-    const hoy = new Date();
-    hoy.setHours(0,0,0,0);
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
     const vence = new Date(fechaProximoPago + 'T00:00:00');
     const diffDias = Math.round((vence - hoy) / (1000 * 60 * 60 * 24));
     if (diffDias < 0) return 'atrasado';
@@ -811,33 +528,23 @@
   function renderizarPrestamos() {
     const contenedor = document.getElementById('listaPrestamos');
     const alerta = document.getElementById('alertaCobros');
-
     if (prestamosCache.length === 0) {
       contenedor.innerHTML = '<div class="empty-msg">Aún no hay préstamos. Toca + para agregar uno.</div>';
       alerta.classList.add('vacia');
       return;
     }
-
     const activos = prestamosCache.filter(p => p.estado !== 'pagado');
     const atrasados = activos.filter(p => calcularEstadoFecha(p.fechaProximoPago) === 'atrasado');
     const hoy = activos.filter(p => calcularEstadoFecha(p.fechaProximoPago) === 'hoy');
-
     if (atrasados.length === 0 && hoy.length === 0) {
       alerta.classList.add('vacia');
     } else {
       alerta.classList.remove('vacia');
       let texto = '';
-      if (atrasados.length > 0) {
-        texto += `⚠️ <strong>${atrasados.length} cliente(s) atrasado(s):</strong> ` +
-          atrasados.map(p => p.clienteNombre).join(', ') + '. ';
-      }
-      if (hoy.length > 0) {
-        texto += `📅 <strong>${hoy.length} cobro(s) vence(n) hoy:</strong> ` +
-          hoy.map(p => p.clienteNombre).join(', ') + '.';
-      }
+      if (atrasados.length > 0) texto += '⚠️ <strong>' + atrasados.length + ' cliente(s) atrasado(s):</strong> ' + atrasados.map(p => p.clienteNombre).join(', ') + '. ';
+      if (hoy.length > 0) texto += '📅 <strong>' + hoy.length + ' cobro(s) vence(n) hoy:</strong> ' + hoy.map(p => p.clienteNombre).join(', ') + '.';
       alerta.innerHTML = texto;
     }
-
     contenedor.innerHTML = prestamosCache.map(p => {
       let badge = '';
       if (p.estado === 'pagado') {
@@ -848,93 +555,53 @@
         else if (estado === 'hoy') badge = '<span class="badge badge-naranja">Vence hoy</span>';
         else badge = '<span class="badge badge-verde">Al día</span>';
       }
-
       const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
       const montoCuota = Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.cuotaFija;
       const montoInteresSolo = periodos * p.interesPorCuota;
       const frecLabel = NOMBRES_FRECUENCIA[p.frecuencia] || p.frecuencia;
-
-      return `
-        <div class="prestamo-item">
-          <div class="prestamo-top">
-            <div class="prestamo-nombre">${p.clienteNombre}</div>
-            <div class="prestamo-monto">$${Number(p.saldoCapitalPendiente).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-          </div>
-          <div class="prestamo-detalle">Capital pendiente · Cuota ${p.cuotasPagadas} de ${p.cantidadPagos} · $${p.cuotaFija.toLocaleString(undefined,{maximumFractionDigits:2})} ${frecLabel.toLowerCase()}</div>
-          ${p.estado !== 'pagado' ? `<div class="prestamo-interes-linea">Cuota a pagar: $${montoCuota.toLocaleString(undefined, {maximumFractionDigits: 2})} · Solo interés: $${montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>` : ''}
-          ${p.estado !== 'pagado' && periodos > 1 ? `<div class="prestamo-atraso-linea">⚠️ ${periodos} períodos acumulados sin pagar</div>` : ''}
-          <div class="prestamo-fecha">Próximo pago: ${p.fechaProximoPago}${p.notas ? ' · ' + p.notas : ''}</div>
-          ${badge}
-          <div class="prestamo-acciones">
-            ${p.estado !== 'pagado' ? `
-              <button class="btn-ok" onclick="pagarCuota('${p.id}')">Pagar cuota</button>
-              <button class="btn-interes" onclick="pagarInteres('${p.id}')">Pagar interés</button>
-              <button class="btn-edit" onclick="editarPrestamo('${p.id}')">Editar</button>
-            ` : ''}
-            <button class="btn-danger" onclick="eliminarPrestamo('${p.id}')">Eliminar</button>
-          </div>
-        </div>
-      `;
+      return '<div class="prestamo-item">' +
+        '<div class="prestamo-top"><div class="prestamo-nombre">' + p.clienteNombre + '</div><div class="prestamo-monto">$' + Number(p.saldoCapitalPendiente).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div></div>' +
+        '<div class="prestamo-detalle">Capital pendiente · Cuota ' + p.cuotasPagadas + ' de ' + p.cantidadPagos + ' · $' + p.cuotaFija.toLocaleString(undefined,{maximumFractionDigits:2}) + ' ' + frecLabel.toLowerCase() + '</div>' +
+        (p.estado !== 'pagado' ? '<div class="prestamo-interes-linea">Cuota a pagar: $' + montoCuota.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' · Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div>' : '') +
+        (p.estado !== 'pagado' && periodos > 1 ? '<div class="prestamo-atraso-linea">⚠️ ' + periodos + ' períodos acumulados sin pagar</div>' : '') +
+        '<div class="prestamo-fecha">Próximo pago: ' + p.fechaProximoPago + (p.notas ? ' · ' + p.notas : '') + '</div>' +
+        badge +
+        '<div class="prestamo-acciones">' +
+        (p.estado !== 'pagado' ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>' : '') +
+        '<button class="btn-danger" onclick="eliminarPrestamo(\'' + p.id + '\')">Eliminar</button>' +
+        '</div></div>';
     }).join('');
   }
-
-  // ===================== PAGOS / RESUMEN =====================
 
   const qPagos = query(collection(db, 'pagos'), orderBy('fechaPago', 'desc'));
   onSnapshot(qPagos, (snapshot) => {
     pagosCache = [];
-    snapshot.forEach(docSnap => {
-      pagosCache.push({ id: docSnap.id, ...docSnap.data() });
-    });
+    snapshot.forEach(docSnap => { pagosCache.push({ id: docSnap.id, ...docSnap.data() }); });
     renderizarPagos();
     renderizarResumen();
   });
 
   function renderizarResumen() {
-    const capitalInvertido = prestamosCache
-      .filter(p => p.estado !== 'pagado')
-      .reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
-
-    const capitalRecuperado = pagosCache
-      .filter(p => p.tipo === 'cuota')
-      .reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
-
-    const gananciasCuotas = pagosCache
-      .filter(p => p.tipo === 'cuota')
-      .reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
-    const gananciasInteres = pagosCache
-      .filter(p => p.tipo === 'interes')
-      .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    const capitalInvertido = prestamosCache.filter(p => p.estado !== 'pagado').reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
+    const capitalRecuperado = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
+    const gananciasCuotas = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
+    const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes').reduce((sum, p) => sum + Number(p.monto || 0), 0);
     const ganancias = gananciasCuotas + gananciasInteres;
-
-    document.getElementById('resCapitalInvertido').textContent =
-      '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
-    document.getElementById('resCapitalRecuperado').textContent =
-      '$' + capitalRecuperado.toLocaleString(undefined, {maximumFractionDigits: 2});
-    document.getElementById('resGanancias').textContent =
-      '$' + ganancias.toLocaleString(undefined, {maximumFractionDigits: 2});
+    document.getElementById('resCapitalInvertido').textContent = '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
+    document.getElementById('resCapitalRecuperado').textContent = '$' + capitalRecuperado.toLocaleString(undefined, {maximumFractionDigits: 2});
+    document.getElementById('resGanancias').textContent = '$' + ganancias.toLocaleString(undefined, {maximumFractionDigits: 2});
   }
 
   function renderizarPagos() {
     const contenedor = document.getElementById('listaPagos');
-    if (pagosCache.length === 0) {
-      contenedor.innerHTML = '<div class="empty-msg">Aún no hay pagos registrados.</div>';
-      return;
-    }
+    if (pagosCache.length === 0) { contenedor.innerHTML = '<div class="empty-msg">Aún no hay pagos registrados.</div>'; return; }
     contenedor.innerHTML = pagosCache.map(p => {
       const fecha = new Date(p.fechaPago);
       const fechaTexto = fecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
       const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : 'Cuota (capital+interés)';
-      return `
-        <div class="pago-item">
-          <div class="pago-info">
-            <div class="pago-nombre">${p.clienteNombre}</div>
-            <div class="pago-detalle">${tipoTexto} · ${fechaTexto}</div>
-          </div>
-          <div class="pago-monto ${p.tipo}">$${Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-          <button class="btn-danger" onclick="eliminarPago('${p.id}')">Eliminar</button>
-        </div>
-      `;
+      return '<div class="pago-item"><div class="pago-info"><div class="pago-nombre">' + p.clienteNombre + '</div><div class="pago-detalle">' + tipoTexto + ' · ' + fechaTexto + '</div></div>' +
+        '<div class="pago-monto ' + p.tipo + '">$' + Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div>' +
+        '<button class="btn-danger" onclick="eliminarPago(\'' + p.id + '\')">Eliminar</button></div>';
     }).join('');
   }
 
@@ -942,74 +609,49 @@
     const pago = pagosCache.find(p => p.id === id);
     if (!pago) return;
     if (!confirm('¿Eliminar este pago del historial? Se deshará su efecto en el préstamo.')) return;
-
     try {
       const prestamo = prestamosCache.find(p => p.id === pago.prestamoId);
-
       if (prestamo) {
         if (pago.tipo === 'interes') {
-          await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
-            fechaProximoPago: pago.fechaAnterior
-          });
+          await updateDoc(doc(db, 'prestamos', pago.prestamoId), { fechaProximoPago: pago.fechaAnterior });
         } else if (pago.tipo === 'cuota') {
           const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
           const nuevasCuotasPagadas = Math.max(0, Number(prestamo.cuotasPagadas || 0) - Number(pago.periodos || 1));
           await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
-            saldoCapitalPendiente: nuevoSaldoCapital,
-            cuotasPagadas: nuevasCuotasPagadas,
-            fechaProximoPago: pago.fechaAnterior,
-            estado: 'activo'
+            saldoCapitalPendiente: nuevoSaldoCapital, cuotasPagadas: nuevasCuotasPagadas,
+            fechaProximoPago: pago.fechaAnterior, estado: 'activo'
           });
         }
       }
-
       await deleteDoc(doc(db, 'pagos', id));
-    } catch (error) {
-      alert('Error al eliminar: ' + error.message);
-    }
+    } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
-
-  // ===================== RECIBO =====================
 
   window.mostrarRecibo = function (datos) {
     const ahora = new Date();
-    const fechaTexto = ahora.toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' }) +
-      ' · ' + ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
-
+    const fechaTexto = ahora.toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' }) + ' · ' + ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
     document.getElementById('reciboFechaTop').textContent = fechaTexto;
     document.getElementById('reciboCliente').textContent = datos.clienteNombre;
     document.getElementById('reciboTipo').textContent = datos.tipo;
     document.getElementById('reciboFecha').textContent = fechaTexto;
-    document.getElementById('reciboMonto').textContent =
-      '$' + Number(datos.monto).toLocaleString(undefined, {maximumFractionDigits: 2});
-
+    document.getElementById('reciboMonto').textContent = '$' + Number(datos.monto).toLocaleString(undefined, {maximumFractionDigits: 2});
     const lineaCuotas = document.getElementById('reciboLineaCuotas');
     const lineaSaldo = document.getElementById('reciboLineaSaldo');
     const lineaProximo = document.getElementById('reciboLineaProximo');
-
     if (datos.cuotas) {
-      lineaCuotas.style.display = 'flex';
-      lineaSaldo.style.display = 'flex';
+      lineaCuotas.style.display = 'flex'; lineaSaldo.style.display = 'flex';
       document.getElementById('reciboCuotas').textContent = datos.cuotas;
-      document.getElementById('reciboSaldo').textContent =
-        '$' + Number(datos.saldo).toLocaleString(undefined, {maximumFractionDigits: 2});
+      document.getElementById('reciboSaldo').textContent = '$' + Number(datos.saldo).toLocaleString(undefined, {maximumFractionDigits: 2});
     } else {
-      lineaCuotas.style.display = 'none';
-      lineaSaldo.style.display = 'none';
+      lineaCuotas.style.display = 'none'; lineaSaldo.style.display = 'none';
     }
-
     lineaProximo.style.display = 'flex';
     document.getElementById('reciboProximo').textContent = datos.proximoPago || '';
-
-    document.getElementById('reciboImprimir').innerHTML =
-      document.getElementById('reciboContenido').innerHTML;
-
+    document.getElementById('reciboImprimir').innerHTML = document.getElementById('reciboContenido').innerHTML;
     document.getElementById('modalRecibo').classList.add('active');
   };
 
-  window.cerrarModalRecibo = function () {
-    document.getElementById('modalRecibo').classList.remove('active');
-  };
+  window.cerrarModalRecibo = function () { document.getElementById('modalRecibo').classList.remove('active'); };
 </script>
 
 </body>
