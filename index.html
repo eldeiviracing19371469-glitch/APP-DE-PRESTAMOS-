@@ -131,9 +131,11 @@
 
   .fila-doble { display: flex; gap: 10px; }
   .fila-doble > div { flex: 1; }
+  .fila-triple { display: flex; gap: 8px; }
+  .fila-triple > div { flex: 1; }
   .total-preview {
     background: #f0f7ff; border-radius: 8px; padding: 10px 12px;
-    font-size: 14px; margin-bottom: 12px; color: #1c1c1e;
+    font-size: 14px; margin-bottom: 12px; color: #1c1c1e; line-height: 1.6;
   }
   .total-preview strong { color: #007aff; }
 
@@ -161,7 +163,7 @@
   .pago-detalle { font-size: 12px; color: #666; margin-top: 2px; }
   .pago-monto { font-weight: 700; font-size: 15px; margin-right: 10px; }
   .pago-monto.interes { color: #c96a00; }
-  .pago-monto.capital { color: #1a7d3c; }
+  .pago-monto.cuota { color: #1a7d3c; }
   .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
 
   /* RECIBO */
@@ -290,18 +292,22 @@
     <label>Cliente</label>
     <select id="prestamoCliente"></select>
 
-    <div class="fila-doble">
+    <div class="fila-triple">
       <div>
-        <label>Capital prestado</label>
-        <input type="number" id="prestamoMonto" placeholder="Ej. 5000" oninput="actualizarTotalPreview()">
+        <label>Capital</label>
+        <input type="number" id="prestamoMonto" placeholder="5000" oninput="actualizarTotalPreview()">
       </div>
       <div>
-        <label>% de interés por período</label>
-        <input type="number" id="prestamoInteres" placeholder="Ej. 20" oninput="actualizarTotalPreview()">
+        <label>% interés total</label>
+        <input type="number" id="prestamoInteres" placeholder="20" oninput="actualizarTotalPreview()">
+      </div>
+      <div>
+        <label>Cant. de pagos</label>
+        <input type="number" id="prestamoCantPagos" placeholder="8" oninput="actualizarTotalPreview()">
       </div>
     </div>
 
-    <label>Frecuencia de cobro</label>
+    <label>Frecuencia de cada pago</label>
     <select id="prestamoFrecuencia" onchange="actualizarTotalPreview()">
       <option value="diario">Diario</option>
       <option value="semanal">Semanal</option>
@@ -309,9 +315,9 @@
       <option value="mensual">Mensual</option>
     </select>
 
-    <div class="total-preview" id="totalPreview">Interés por período: $0</div>
+    <div class="total-preview" id="totalPreview">Completa los datos para ver el plan</div>
 
-    <label>Fecha del próximo pago</label>
+    <label>Fecha del primer pago</label>
     <input type="date" id="prestamoFecha">
 
     <label>Notas (opcional)</label>
@@ -335,8 +341,8 @@
       <div class="recibo-linea"><span>Cliente</span><strong id="reciboCliente"></strong></div>
       <div class="recibo-linea"><span>Tipo de pago</span><strong id="reciboTipo"></strong></div>
       <div class="recibo-linea"><span>Fecha</span><strong id="reciboFecha"></strong></div>
-      <div class="recibo-linea" id="reciboLineaSaldoAntes"><span>Saldo capital antes</span><strong id="reciboSaldoAntes"></strong></div>
-      <div class="recibo-linea" id="reciboLineaSaldoDespues"><span>Saldo capital después</span><strong id="reciboSaldoDespues"></strong></div>
+      <div class="recibo-linea" id="reciboLineaCuotas"><span>Cuotas pagadas</span><strong id="reciboCuotas"></strong></div>
+      <div class="recibo-linea" id="reciboLineaSaldo"><span>Saldo pendiente</span><strong id="reciboSaldo"></strong></div>
       <div class="recibo-linea" id="reciboLineaProximo"><span>Próximo cobro</span><strong id="reciboProximo"></strong></div>
       <div class="recibo-total"><span>Total pagado</span><strong id="reciboMonto"></strong></div>
     </div>
@@ -557,6 +563,7 @@
     document.getElementById('prestamoCliente').disabled = false;
     document.getElementById('prestamoMonto').value = '';
     document.getElementById('prestamoInteres').value = '';
+    document.getElementById('prestamoCantPagos').value = '';
     document.getElementById('prestamoFrecuencia').value = 'semanal';
     document.getElementById('prestamoFecha').value = '';
     document.getElementById('prestamoNotas').value = '';
@@ -571,8 +578,9 @@
     document.getElementById('prestamoId').value = p.id;
     document.getElementById('prestamoCliente').value = p.clienteId;
     document.getElementById('prestamoCliente').disabled = true;
-    document.getElementById('prestamoMonto').value = p.saldoCapital != null ? p.saldoCapital : p.monto;
+    document.getElementById('prestamoMonto').value = p.capital;
     document.getElementById('prestamoInteres').value = p.interesPorcentaje;
+    document.getElementById('prestamoCantPagos').value = p.cantidadPagos;
     document.getElementById('prestamoFrecuencia').value = p.frecuencia || 'semanal';
     document.getElementById('prestamoFecha').value = p.fechaProximoPago;
     document.getElementById('prestamoNotas').value = p.notas || '';
@@ -585,12 +593,24 @@
   };
 
   window.actualizarTotalPreview = function () {
-    const monto = parseFloat(document.getElementById('prestamoMonto').value) || 0;
+    const capital = parseFloat(document.getElementById('prestamoMonto').value) || 0;
     const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
+    const cantPagos = parseInt(document.getElementById('prestamoCantPagos').value) || 0;
     const frecuencia = document.getElementById('prestamoFrecuencia').value;
-    const montoInteres = monto * interes / 100;
+
+    if (!capital || !cantPagos) {
+      document.getElementById('totalPreview').textContent = 'Completa los datos para ver el plan';
+      return;
+    }
+
+    const interesTotal = capital * interes / 100;
+    const totalDeuda = capital + interesTotal;
+    const cuota = totalDeuda / cantPagos;
+
     document.getElementById('totalPreview').innerHTML =
-      `Interés ${NOMBRES_FRECUENCIA[frecuencia]}: <strong>$${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong>`;
+      `Interés total: <strong>$${interesTotal.toLocaleString(undefined,{maximumFractionDigits:2})}</strong><br>` +
+      `Total a pagar: <strong>$${totalDeuda.toLocaleString(undefined,{maximumFractionDigits:2})}</strong><br>` +
+      `Plan: <strong>${cantPagos} pagos ${NOMBRES_FRECUENCIA[frecuencia].toLowerCase()}es de $${cuota.toLocaleString(undefined,{maximumFractionDigits:2})}</strong>`;
   };
 
   function avanzarFecha(fechaStr, frecuencia, periodos) {
@@ -604,7 +624,6 @@
     return fecha.toISOString().split('T')[0];
   }
 
-  // Calcula cuántos períodos de interés se deben (mínimo 1: el período actual)
   function calcularPeriodosPendientes(fechaProximoPago, frecuencia) {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -618,14 +637,15 @@
   window.guardarPrestamo = async function () {
     const id = document.getElementById('prestamoId').value;
     const clienteId = document.getElementById('prestamoCliente').value;
-    const monto = parseFloat(document.getElementById('prestamoMonto').value);
+    const capital = parseFloat(document.getElementById('prestamoMonto').value);
     const interesPorcentaje = parseFloat(document.getElementById('prestamoInteres').value) || 0;
+    const cantidadPagos = parseInt(document.getElementById('prestamoCantPagos').value);
     const frecuencia = document.getElementById('prestamoFrecuencia').value;
     const fechaProximoPago = document.getElementById('prestamoFecha').value;
     const notas = document.getElementById('prestamoNotas').value.trim();
 
-    if (!clienteId || !monto || !fechaProximoPago) {
-      alert('Completa cliente, capital y fecha del próximo pago.');
+    if (!clienteId || !capital || !cantidadPagos || !fechaProximoPago) {
+      alert('Completa cliente, capital, cantidad de pagos y fecha.');
       return;
     }
 
@@ -637,15 +657,26 @@
     try {
       if (id) {
         await updateDoc(doc(db, 'prestamos', id), {
-          interesPorcentaje, frecuencia, fechaProximoPago, notas
+          interesPorcentaje, cantidadPagos, frecuencia, fechaProximoPago, notas
         });
       } else {
+        const interesTotal = capital * interesPorcentaje / 100;
+        const totalDeuda = capital + interesTotal;
+        const capitalPorCuota = capital / cantidadPagos;
+        const interesPorCuota = interesTotal / cantidadPagos;
+        const cuotaFija = totalDeuda / cantidadPagos;
+
         await addDoc(collection(db, 'prestamos'), {
           clienteId,
           clienteNombre: cliente ? cliente.nombre : 'Cliente',
-          monto,
-          saldoCapital: monto,
+          capital,
           interesPorcentaje,
+          cantidadPagos,
+          cuotasPagadas: 0,
+          capitalPorCuota,
+          interesPorCuota,
+          cuotaFija,
+          saldoCapitalPendiente: capital,
           frecuencia,
           fechaProximoPago,
           notas,
@@ -666,9 +697,9 @@
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
     const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-    const montoInteres = periodos * (p.saldoCapital * p.interesPorcentaje / 100);
+    const montoInteres = periodos * p.interesPorCuota;
     const avisoAtraso = periodos > 1 ? ` (incluye ${periodos} períodos acumulados)` : '';
-    if (!confirm(`¿Confirmar pago de interés de $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}${avisoAtraso}?`)) return;
+    if (!confirm(`¿Confirmar pago de solo interés de $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}${avisoAtraso}? El capital no se toca.`)) return;
     try {
       const fechaAnterior = p.fechaProximoPago;
       const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
@@ -680,14 +711,13 @@
         tipo: 'interes',
         monto: montoInteres,
         periodos,
-        frecuencia: p.frecuencia,
         fechaAnterior,
         fechaNueva: nuevaFecha,
         fechaPago: Date.now()
       });
       mostrarRecibo({
         clienteNombre: p.clienteNombre,
-        tipo: 'Pago de interés' + (periodos > 1 ? ` (${periodos} períodos)` : ''),
+        tipo: 'Pago de solo interés' + (periodos > 1 ? ` (${periodos} períodos)` : ''),
         monto: montoInteres,
         proximoPago: nuevaFecha
       });
@@ -696,33 +726,53 @@
     }
   };
 
-  window.abonarCapital = async function (id) {
+  window.pagarCuota = async function (id) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
-    const abono = parseFloat(prompt(`Capital pendiente: $${p.saldoCapital}\n¿Cuánto capital va a pagar?`));
-    if (!abono || abono <= 0) return;
-    const nuevoSaldo = Math.max(0, p.saldoCapital - abono);
-    const estadoAnterior = p.estado;
+    const periodos = Math.min(
+      calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia),
+      p.cantidadPagos - p.cuotasPagadas
+    );
+    if (periodos <= 0) return;
+    const montoCapital = p.capitalPorCuota * periodos;
+    const montoInteres = p.interesPorCuota * periodos;
+    const montoTotal = montoCapital + montoInteres;
+    const avisoAtraso = periodos > 1 ? ` (${periodos} cuotas)` : '';
+    if (!confirm(`¿Confirmar pago de cuota${avisoAtraso} de $${montoTotal.toLocaleString(undefined, {maximumFractionDigits: 2})}?`)) return;
+
+    const nuevasCuotasPagadas = p.cuotasPagadas + periodos;
+    const nuevoSaldoCapital = Math.max(0, p.saldoCapitalPendiente - montoCapital);
+    const pagoCompleto = nuevasCuotasPagadas >= p.cantidadPagos;
+
     try {
+      const fechaAnterior = p.fechaProximoPago;
+      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
       await updateDoc(doc(db, 'prestamos', id), {
-        saldoCapital: nuevoSaldo,
-        estado: nuevoSaldo === 0 ? 'pagado' : 'activo'
+        cuotasPagadas: nuevasCuotasPagadas,
+        saldoCapitalPendiente: nuevoSaldoCapital,
+        fechaProximoPago: nuevaFecha,
+        estado: pagoCompleto ? 'pagado' : 'activo'
       });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id,
         clienteId: p.clienteId,
         clienteNombre: p.clienteNombre,
-        tipo: 'capital',
-        monto: abono,
-        estadoAnterior,
+        tipo: 'cuota',
+        monto: montoTotal,
+        montoCapital,
+        montoInteres,
+        periodos,
+        fechaAnterior,
+        fechaNueva: nuevaFecha,
         fechaPago: Date.now()
       });
       mostrarRecibo({
         clienteNombre: p.clienteNombre,
-        tipo: 'Abono a capital',
-        monto: abono,
-        saldoAntes: p.saldoCapital,
-        saldoDespues: nuevoSaldo
+        tipo: 'Pago de cuota' + avisoAtraso,
+        monto: montoTotal,
+        cuotas: `${nuevasCuotasPagadas} de ${p.cantidadPagos}`,
+        saldo: nuevoSaldoCapital,
+        proximoPago: pagoCompleto ? '—' : nuevaFecha
       });
     } catch (error) {
       alert('Error: ' + error.message);
@@ -800,24 +850,25 @@
       }
 
       const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-      const montoInteres = periodos * (p.saldoCapital * p.interesPorcentaje / 100);
+      const montoCuota = Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.cuotaFija;
+      const montoInteresSolo = periodos * p.interesPorCuota;
       const frecLabel = NOMBRES_FRECUENCIA[p.frecuencia] || p.frecuencia;
 
       return `
         <div class="prestamo-item">
           <div class="prestamo-top">
             <div class="prestamo-nombre">${p.clienteNombre}</div>
-            <div class="prestamo-monto">$${Number(p.saldoCapital).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+            <div class="prestamo-monto">$${Number(p.saldoCapitalPendiente).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
           </div>
-          <div class="prestamo-detalle">Capital pendiente · ${p.interesPorcentaje}% ${frecLabel.toLowerCase()}</div>
-          ${p.estado !== 'pagado' ? `<div class="prestamo-interes-linea">Interés a pagar: $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>` : ''}
+          <div class="prestamo-detalle">Capital pendiente · Cuota ${p.cuotasPagadas} de ${p.cantidadPagos} · $${p.cuotaFija.toLocaleString(undefined,{maximumFractionDigits:2})} ${frecLabel.toLowerCase()}</div>
+          ${p.estado !== 'pagado' ? `<div class="prestamo-interes-linea">Cuota a pagar: $${montoCuota.toLocaleString(undefined, {maximumFractionDigits: 2})} · Solo interés: $${montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>` : ''}
           ${p.estado !== 'pagado' && periodos > 1 ? `<div class="prestamo-atraso-linea">⚠️ ${periodos} períodos acumulados sin pagar</div>` : ''}
           <div class="prestamo-fecha">Próximo pago: ${p.fechaProximoPago}${p.notas ? ' · ' + p.notas : ''}</div>
           ${badge}
           <div class="prestamo-acciones">
             ${p.estado !== 'pagado' ? `
+              <button class="btn-ok" onclick="pagarCuota('${p.id}')">Pagar cuota</button>
               <button class="btn-interes" onclick="pagarInteres('${p.id}')">Pagar interés</button>
-              <button class="btn-ok" onclick="abonarCapital('${p.id}')">Abonar capital</button>
               <button class="btn-edit" onclick="editarPrestamo('${p.id}')">Editar</button>
             ` : ''}
             <button class="btn-danger" onclick="eliminarPrestamo('${p.id}')">Eliminar</button>
@@ -842,15 +893,19 @@
   function renderizarResumen() {
     const capitalInvertido = prestamosCache
       .filter(p => p.estado !== 'pagado')
-      .reduce((sum, p) => sum + Number(p.saldoCapital || 0), 0);
+      .reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
 
     const capitalRecuperado = pagosCache
-      .filter(p => p.tipo === 'capital')
-      .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+      .filter(p => p.tipo === 'cuota')
+      .reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
 
-    const ganancias = pagosCache
+    const gananciasCuotas = pagosCache
+      .filter(p => p.tipo === 'cuota')
+      .reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
+    const gananciasInteres = pagosCache
       .filter(p => p.tipo === 'interes')
       .reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    const ganancias = gananciasCuotas + gananciasInteres;
 
     document.getElementById('resCapitalInvertido').textContent =
       '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -869,7 +924,7 @@
     contenedor.innerHTML = pagosCache.map(p => {
       const fecha = new Date(p.fechaPago);
       const fechaTexto = fecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
-      const tipoTexto = p.tipo === 'interes' ? 'Pago de interés' : 'Abono a capital';
+      const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : 'Cuota (capital+interés)';
       return `
         <div class="pago-item">
           <div class="pago-info">
@@ -896,10 +951,13 @@
           await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
             fechaProximoPago: pago.fechaAnterior
           });
-        } else if (pago.tipo === 'capital') {
-          const nuevoSaldo = Number(prestamo.saldoCapital || 0) + Number(pago.monto);
+        } else if (pago.tipo === 'cuota') {
+          const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
+          const nuevasCuotasPagadas = Math.max(0, Number(prestamo.cuotasPagadas || 0) - Number(pago.periodos || 1));
           await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
-            saldoCapital: nuevoSaldo,
+            saldoCapitalPendiente: nuevoSaldoCapital,
+            cuotasPagadas: nuevasCuotasPagadas,
+            fechaProximoPago: pago.fechaAnterior,
             estado: 'activo'
           });
         }
@@ -925,24 +983,23 @@
     document.getElementById('reciboMonto').textContent =
       '$' + Number(datos.monto).toLocaleString(undefined, {maximumFractionDigits: 2});
 
-    const lineaSaldoAntes = document.getElementById('reciboLineaSaldoAntes');
-    const lineaSaldoDespues = document.getElementById('reciboLineaSaldoDespues');
+    const lineaCuotas = document.getElementById('reciboLineaCuotas');
+    const lineaSaldo = document.getElementById('reciboLineaSaldo');
     const lineaProximo = document.getElementById('reciboLineaProximo');
 
-    if (datos.saldoAntes != null) {
-      lineaSaldoAntes.style.display = 'flex';
-      lineaSaldoDespues.style.display = 'flex';
-      document.getElementById('reciboSaldoAntes').textContent =
-        '$' + Number(datos.saldoAntes).toLocaleString(undefined, {maximumFractionDigits: 2});
-      document.getElementById('reciboSaldoDespues').textContent =
-        '$' + Number(datos.saldoDespues).toLocaleString(undefined, {maximumFractionDigits: 2});
-      lineaProximo.style.display = 'none';
+    if (datos.cuotas) {
+      lineaCuotas.style.display = 'flex';
+      lineaSaldo.style.display = 'flex';
+      document.getElementById('reciboCuotas').textContent = datos.cuotas;
+      document.getElementById('reciboSaldo').textContent =
+        '$' + Number(datos.saldo).toLocaleString(undefined, {maximumFractionDigits: 2});
     } else {
-      lineaSaldoAntes.style.display = 'none';
-      lineaSaldoDespues.style.display = 'none';
-      lineaProximo.style.display = 'flex';
-      document.getElementById('reciboProximo').textContent = datos.proximoPago || '';
+      lineaCuotas.style.display = 'none';
+      lineaSaldo.style.display = 'none';
     }
+
+    lineaProximo.style.display = 'flex';
+    document.getElementById('reciboProximo').textContent = datos.proximoPago || '';
 
     document.getElementById('reciboImprimir').innerHTML =
       document.getElementById('reciboContenido').innerHTML;
