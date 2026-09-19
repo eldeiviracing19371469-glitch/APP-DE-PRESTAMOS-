@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Borrar préstamos</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; padding: 30px; text-align: center; background: #f2f2f7; }
+  button { padding: 16px 24px; font-size: 17px; border-radius: 10px; border: none; background: #ff3b30; color: white; margin-top: 20px; }
+  #estado { margin-top: 20px; font-size: 15px; color: #333; }
+</style>
+</head>
+<body>
+
+<h2>Borrar todos los préstamos</h2>
+<p>Esto elimina TODOS los documentos de la colección "prestamos". No afecta clientes ni pagos.</p>
+<button onclick="borrarTodo()">Borrar todos los préstamos</button>
+<div id="estado"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAAft1vdr3htDhVwaqPqCtybVt8evPifGY",
+    authDomain: "app-de-prestamo.firebaseapp.com",
+    projectId: "app-de-prestamo",
+    storageBucket: "app-de-prestamo.firebasestorage.app",
+    messagingSenderId: "34230125675",
+    appId: "1:34230125675:web:d985df8545f1cd38225d2e",
+    measurementId: "G-PCFMFSXV0P"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window.borrarTodo = async function () {
+    if (!confirm('¿Seguro? Esto borra TODOS los préstamos permanentemente.')) return;
+    const estado = document.getElementById('estado');
+    estado.textContent = 'Borrando...';
+    try {
+      const snapshot = await getDocs(collection(db, 'prestamos'));
+      let contador = 0;
+      for (const docSnap of snapshot.docs) {
+        await deleteDoc(doc(db, 'prestamos', docSnap.id));
+        contador++;
+        estado.textContent = 'Borrados: ' + contador + ' de ' + snapshot.size;
+      }
+      estado.textContent = '✅ Listo. Se borraron ' + contador + ' préstamos.';
+    } catch (error) {
+      estado.textContent = 'Error: ' + error.message;
+    }
+  };
+</script>
+
+</body>
+</html>
