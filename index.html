@@ -117,6 +117,7 @@
   .prestamo-monto { font-weight: 600; font-size: 15px; }
   .prestamo-detalle { font-size: 13px; color: #666; margin-top: 2px; }
   .prestamo-interes-linea { font-size: 13px; color: #c96a00; margin-top: 4px; font-weight: 600; }
+  .prestamo-atraso-linea { font-size: 12px; color: #c9302c; margin-top: 2px; font-weight: 600; }
   .prestamo-fecha { font-size: 13px; color: #666; margin-top: 2px; }
   .badge {
     display: inline-block; padding: 3px 10px; border-radius: 20px;
@@ -162,6 +163,30 @@
   .pago-monto.interes { color: #c96a00; }
   .pago-monto.capital { color: #1a7d3c; }
   .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
+
+  /* RECIBO */
+  #reciboImprimir { display: none; }
+  .recibo-linea {
+    display: flex; justify-content: space-between; padding: 8px 0;
+    border-bottom: 1px dashed #ddd; font-size: 14px;
+  }
+  .recibo-linea strong { text-align: right; }
+  .recibo-total {
+    display: flex; justify-content: space-between; padding: 12px 0;
+    font-size: 17px; font-weight: 700; border-top: 2px solid #333; margin-top: 6px;
+  }
+  .recibo-titulo { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .recibo-sub { text-align: center; font-size: 12px; color: #888; margin-bottom: 16px; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #reciboImprimir, #reciboImprimir * { visibility: visible; }
+    #reciboImprimir {
+      display: block !important;
+      position: absolute; top: 0; left: 0; width: 100%; padding: 20px;
+    }
+    .no-imprimir { display: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -296,6 +321,32 @@
   </div>
 </div>
 
+<!-- MODAL RECIBO -->
+<div class="modal-overlay" id="modalRecibo">
+  <div class="modal-content">
+    <div class="modal-header no-imprimir">
+      <h3>Recibo de pago</h3>
+      <button class="modal-close" onclick="cerrarModalRecibo()">✕</button>
+    </div>
+
+    <div id="reciboContenido">
+      <div class="recibo-titulo">App de Préstamos</div>
+      <div class="recibo-sub" id="reciboFechaTop"></div>
+      <div class="recibo-linea"><span>Cliente</span><strong id="reciboCliente"></strong></div>
+      <div class="recibo-linea"><span>Tipo de pago</span><strong id="reciboTipo"></strong></div>
+      <div class="recibo-linea"><span>Fecha</span><strong id="reciboFecha"></strong></div>
+      <div class="recibo-linea" id="reciboLineaSaldoAntes"><span>Saldo capital antes</span><strong id="reciboSaldoAntes"></strong></div>
+      <div class="recibo-linea" id="reciboLineaSaldoDespues"><span>Saldo capital después</span><strong id="reciboSaldoDespues"></strong></div>
+      <div class="recibo-linea" id="reciboLineaProximo"><span>Próximo cobro</span><strong id="reciboProximo"></strong></div>
+      <div class="recibo-total"><span>Total pagado</span><strong id="reciboMonto"></strong></div>
+    </div>
+
+    <button class="btn-primary no-imprimir" onclick="window.print()">🖨️ Imprimir recibo</button>
+    <button class="btn-primary no-imprimir" style="background:#8e8e93;" onclick="cerrarModalRecibo()">Cerrar</button>
+  </div>
+</div>
+<div id="reciboImprimir"></div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import {
@@ -328,6 +379,9 @@
 
   const NOMBRES_FRECUENCIA = {
     diario: 'Diario', semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual'
+  };
+  const DIAS_FRECUENCIA = {
+    diario: 1, semanal: 7, quincenal: 15, mensual: 30
   };
 
   // --- Navegación de pestañas ---
@@ -539,13 +593,26 @@
       `Interés ${NOMBRES_FRECUENCIA[frecuencia]}: <strong>$${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong>`;
   };
 
-  function avanzarFecha(fechaStr, frecuencia) {
-    const fecha = new Date(fechaStr + 'T00:00:00');
-    if (frecuencia === 'diario') fecha.setDate(fecha.getDate() + 1);
-    else if (frecuencia === 'semanal') fecha.setDate(fecha.getDate() + 7);
-    else if (frecuencia === 'quincenal') fecha.setDate(fecha.getDate() + 15);
-    else if (frecuencia === 'mensual') fecha.setMonth(fecha.getMonth() + 1);
+  function avanzarFecha(fechaStr, frecuencia, periodos) {
+    let fecha = new Date(fechaStr + 'T00:00:00');
+    for (let i = 0; i < periodos; i++) {
+      if (frecuencia === 'diario') fecha.setDate(fecha.getDate() + 1);
+      else if (frecuencia === 'semanal') fecha.setDate(fecha.getDate() + 7);
+      else if (frecuencia === 'quincenal') fecha.setDate(fecha.getDate() + 15);
+      else if (frecuencia === 'mensual') fecha.setMonth(fecha.getMonth() + 1);
+    }
     return fecha.toISOString().split('T')[0];
+  }
+
+  // Calcula cuántos períodos de interés se deben (mínimo 1: el período actual)
+  function calcularPeriodosPendientes(fechaProximoPago, frecuencia) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const vence = new Date(fechaProximoPago + 'T00:00:00');
+    const diffDias = Math.round((hoy - vence) / (1000 * 60 * 60 * 24));
+    if (diffDias <= 0) return 1;
+    const diasPeriodo = DIAS_FRECUENCIA[frecuencia] || 7;
+    return 1 + Math.ceil(diffDias / diasPeriodo);
   }
 
   window.guardarPrestamo = async function () {
@@ -598,11 +665,13 @@
   window.pagarInteres = async function (id) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
-    const montoInteres = p.saldoCapital * p.interesPorcentaje / 100;
-    if (!confirm(`¿Confirmar pago de interés de $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}? La fecha de próximo cobro avanzará.`)) return;
+    const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
+    const montoInteres = periodos * (p.saldoCapital * p.interesPorcentaje / 100);
+    const avisoAtraso = periodos > 1 ? ` (incluye ${periodos} períodos acumulados)` : '';
+    if (!confirm(`¿Confirmar pago de interés de $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}${avisoAtraso}?`)) return;
     try {
       const fechaAnterior = p.fechaProximoPago;
-      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia);
+      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
       await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id,
@@ -610,10 +679,17 @@
         clienteNombre: p.clienteNombre,
         tipo: 'interes',
         monto: montoInteres,
+        periodos,
         frecuencia: p.frecuencia,
         fechaAnterior,
         fechaNueva: nuevaFecha,
         fechaPago: Date.now()
+      });
+      mostrarRecibo({
+        clienteNombre: p.clienteNombre,
+        tipo: 'Pago de interés' + (periodos > 1 ? ` (${periodos} períodos)` : ''),
+        monto: montoInteres,
+        proximoPago: nuevaFecha
       });
     } catch (error) {
       alert('Error: ' + error.message);
@@ -640,6 +716,13 @@
         monto: abono,
         estadoAnterior,
         fechaPago: Date.now()
+      });
+      mostrarRecibo({
+        clienteNombre: p.clienteNombre,
+        tipo: 'Abono a capital',
+        monto: abono,
+        saldoAntes: p.saldoCapital,
+        saldoDespues: nuevoSaldo
       });
     } catch (error) {
       alert('Error: ' + error.message);
@@ -716,7 +799,8 @@
         else badge = '<span class="badge badge-verde">Al día</span>';
       }
 
-      const montoInteres = (p.saldoCapital * p.interesPorcentaje / 100);
+      const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
+      const montoInteres = periodos * (p.saldoCapital * p.interesPorcentaje / 100);
       const frecLabel = NOMBRES_FRECUENCIA[p.frecuencia] || p.frecuencia;
 
       return `
@@ -726,7 +810,8 @@
             <div class="prestamo-monto">$${Number(p.saldoCapital).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
           </div>
           <div class="prestamo-detalle">Capital pendiente · ${p.interesPorcentaje}% ${frecLabel.toLowerCase()}</div>
-          ${p.estado !== 'pagado' ? `<div class="prestamo-interes-linea">Interés de este período: $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>` : ''}
+          ${p.estado !== 'pagado' ? `<div class="prestamo-interes-linea">Interés a pagar: $${montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>` : ''}
+          ${p.estado !== 'pagado' && periodos > 1 ? `<div class="prestamo-atraso-linea">⚠️ ${periodos} períodos acumulados sin pagar</div>` : ''}
           <div class="prestamo-fecha">Próximo pago: ${p.fechaProximoPago}${p.notas ? ' · ' + p.notas : ''}</div>
           ${badge}
           <div class="prestamo-acciones">
@@ -824,6 +909,49 @@
     } catch (error) {
       alert('Error al eliminar: ' + error.message);
     }
+  };
+
+  // ===================== RECIBO =====================
+
+  window.mostrarRecibo = function (datos) {
+    const ahora = new Date();
+    const fechaTexto = ahora.toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' }) +
+      ' · ' + ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
+
+    document.getElementById('reciboFechaTop').textContent = fechaTexto;
+    document.getElementById('reciboCliente').textContent = datos.clienteNombre;
+    document.getElementById('reciboTipo').textContent = datos.tipo;
+    document.getElementById('reciboFecha').textContent = fechaTexto;
+    document.getElementById('reciboMonto').textContent =
+      '$' + Number(datos.monto).toLocaleString(undefined, {maximumFractionDigits: 2});
+
+    const lineaSaldoAntes = document.getElementById('reciboLineaSaldoAntes');
+    const lineaSaldoDespues = document.getElementById('reciboLineaSaldoDespues');
+    const lineaProximo = document.getElementById('reciboLineaProximo');
+
+    if (datos.saldoAntes != null) {
+      lineaSaldoAntes.style.display = 'flex';
+      lineaSaldoDespues.style.display = 'flex';
+      document.getElementById('reciboSaldoAntes').textContent =
+        '$' + Number(datos.saldoAntes).toLocaleString(undefined, {maximumFractionDigits: 2});
+      document.getElementById('reciboSaldoDespues').textContent =
+        '$' + Number(datos.saldoDespues).toLocaleString(undefined, {maximumFractionDigits: 2});
+      lineaProximo.style.display = 'none';
+    } else {
+      lineaSaldoAntes.style.display = 'none';
+      lineaSaldoDespues.style.display = 'none';
+      lineaProximo.style.display = 'flex';
+      document.getElementById('reciboProximo').textContent = datos.proximoPago || '';
+    }
+
+    document.getElementById('reciboImprimir').innerHTML =
+      document.getElementById('reciboContenido').innerHTML;
+
+    document.getElementById('modalRecibo').classList.add('active');
+  };
+
+  window.cerrarModalRecibo = function () {
+    document.getElementById('modalRecibo').classList.remove('active');
   };
 </script>
 
