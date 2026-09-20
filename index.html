@@ -11,9 +11,9 @@
   header.topbar h2 { font-size: 18px; }
   main { padding: 20px; padding-bottom: 90px; }
   nav.tabbar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-around; padding: 10px 0; }
-  nav.tabbar button { background: none; border: none; font-size: 13px; color: #8e8e93; display: flex; flex-direction: column; align-items: center; }
+  nav.tabbar button { background: none; border: none; font-size: 12px; color: #8e8e93; display: flex; flex-direction: column; align-items: center; }
   nav.tabbar button.active { color: #007aff; }
-  nav.tabbar span.icon { font-size: 22px; margin-bottom: 2px; }
+  nav.tabbar span.icon { font-size: 20px; margin-bottom: 2px; }
   .card { background: white; border-radius: 12px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
   .btn-primary { width: 100%; padding: 14px; border: none; border-radius: 10px; background: #007aff; color: white; font-size: 16px; font-weight: 600; margin-top: 10px; }
   .btn-danger { color: #ff3b30; background: none; border: none; font-size: 14px; }
@@ -57,6 +57,8 @@
   .prestamo-acciones { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
   .fila-triple { display: flex; gap: 8px; }
   .fila-triple > div { flex: 1; }
+  .fila-doble { display: flex; gap: 10px; }
+  .fila-doble > div { flex: 1; }
   .total-preview { background: #f0f7ff; border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; color: #1c1c1e; line-height: 1.6; }
   .total-preview strong { color: #007aff; }
   .resumen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
@@ -74,8 +76,14 @@
   .pago-detalle { font-size: 12px; color: #666; margin-top: 2px; }
   .pago-monto { font-weight: 700; font-size: 15px; margin-right: 10px; }
   .pago-monto.interes { color: #c96a00; }
-  .pago-monto.cuota { color: #1a7d3c; }
+  .pago-monto.cuota, .pago-monto.capital { color: #1a7d3c; }
   .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
+  .empeno-item { display: flex; padding: 12px 0; border-bottom: 1px solid #eee; }
+  .empeno-item:last-child { border-bottom: none; }
+  .empeno-foto { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: #ddd; margin-right: 12px; flex-shrink: 0; }
+  .empeno-info { flex: 1; }
+  .empeno-titulo { font-weight: 600; font-size: 15px; }
+  .empeno-sub { font-size: 13px; color: #666; margin-top: 2px; }
   #reciboImprimir { display: none; }
   .recibo-linea { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #ddd; font-size: 14px; }
   .recibo-linea strong { text-align: right; }
@@ -113,14 +121,19 @@
       <div id="listaPagos"></div>
     </div>
   </div>
+  <div id="seccionEmpenos" style="display:none;">
+    <div class="card"><div id="listaEmpenos"></div></div>
+  </div>
 </main>
 
 <button class="fab" id="btnAgregarCliente" onclick="abrirModalCliente()">+</button>
 <button class="fab" id="btnAgregarPrestamo" style="display:none;" onclick="abrirModalPrestamo()">+</button>
+<button class="fab" id="btnAgregarEmpeno" style="display:none;" onclick="abrirModalEmpeno()">+</button>
 
 <nav class="tabbar">
   <button onclick="cambiarSeccion('Clientes')" class="active" id="tabClientes"><span class="icon">👤</span>Clientes</button>
   <button onclick="cambiarSeccion('Prestamos')" id="tabPrestamos"><span class="icon">💵</span>Préstamos</button>
+  <button onclick="cambiarSeccion('Empenos')" id="tabEmpenos"><span class="icon">📦</span>Empeños</button>
   <button onclick="cambiarSeccion('Pagos')" id="tabPagos"><span class="icon">📄</span>Pagos</button>
 </nav>
 
@@ -152,8 +165,8 @@
     <select id="prestamoCliente"></select>
     <div class="fila-triple">
       <div><label>Capital</label><input type="number" id="prestamoMonto" placeholder="5000" oninput="actualizarTotalPreview()"></div>
-      <div><label>% interés total</label><input type="number" id="prestamoInteres" placeholder="20" oninput="actualizarTotalPreview()"></div>
-      <div><label>Cant. de pagos</label><input type="number" id="prestamoCantPagos" placeholder="8" oninput="actualizarTotalPreview()"></div>
+      <div><label>% interés</label><input type="number" id="prestamoInteres" placeholder="20" oninput="actualizarTotalPreview()"></div>
+      <div><label>Cant. de pagos (opcional)</label><input type="number" id="prestamoCantPagos" placeholder="Sin plazo fijo" oninput="actualizarTotalPreview()"></div>
     </div>
     <label>Frecuencia de cada pago</label>
     <select id="prestamoFrecuencia" onchange="actualizarTotalPreview()">
@@ -168,6 +181,30 @@
     <label>Notas (opcional)</label>
     <input type="text" id="prestamoNotas" placeholder="Notas adicionales...">
     <button class="btn-primary" id="btnGuardarPrestamo" onclick="guardarPrestamo()">Guardar préstamo</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalEmpeno">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="modalTituloEmpeno">Nuevo empeño</h3><button class="modal-close" onclick="cerrarModalEmpeno()">✕</button></div>
+    <input type="hidden" id="empenoId">
+    <label>Cliente</label>
+    <select id="empenoCliente"></select>
+    <label>Artículo</label>
+    <input type="text" id="empenoArticulo" placeholder="Ej. Laptop HP, cadena de oro...">
+    <label>Foto del artículo</label>
+    <img id="previewFotoEmpeno" class="preview-foto">
+    <input type="file" id="inputFotoEmpeno" accept="image/*" capture="environment" style="display:none" onchange="previsualizarFotoEmpeno(event)">
+    <button class="btn-foto" onclick="document.getElementById('inputFotoEmpeno').click()">📷 Tomar o subir foto</button>
+    <div class="fila-doble">
+      <div><label>Valor entregado</label><input type="number" id="empenoValor" placeholder="1000"></div>
+      <div><label>Ganancia esperada</label><input type="number" id="empenoGanancia" placeholder="200"></div>
+    </div>
+    <label>Fecha límite para recuperarlo</label>
+    <input type="date" id="empenoFecha">
+    <label>Notas (opcional)</label>
+    <input type="text" id="empenoNotas" placeholder="Notas adicionales...">
+    <button class="btn-primary" id="btnGuardarEmpeno" onclick="guardarEmpeno()">Guardar empeño</button>
   </div>
 </div>
 
@@ -213,8 +250,11 @@
   let clientesCache = [];
   let prestamosCache = [];
   let pagosCache = [];
+  let empenosCache = [];
   let archivoFotoSeleccionado = null;
   let fotoUrlActual = null;
+  let archivoFotoEmpenoSeleccionado = null;
+  let fotoUrlEmpenoActual = null;
 
   const NOMBRES_FRECUENCIA = { diario: 'Diario', semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual' };
   const DIAS_FRECUENCIA = { diario: 1, semanal: 7, quincenal: 15, mensual: 30 };
@@ -224,10 +264,13 @@
     document.querySelectorAll('nav.tabbar button').forEach(btn => btn.classList.remove('active'));
     document.getElementById('seccion' + nombre).style.display = 'block';
     document.getElementById('tab' + nombre).classList.add('active');
-    document.getElementById('tituloSeccion').textContent = nombre === 'Prestamos' ? 'Préstamos' : nombre;
+    document.getElementById('tituloSeccion').textContent = nombre === 'Prestamos' ? 'Préstamos' : (nombre === 'Empenos' ? 'Empeños' : nombre);
     document.getElementById('btnAgregarCliente').style.display = nombre === 'Clientes' ? 'block' : 'none';
     document.getElementById('btnAgregarPrestamo').style.display = nombre === 'Prestamos' ? 'block' : 'none';
+    document.getElementById('btnAgregarEmpeno').style.display = nombre === 'Empenos' ? 'block' : 'none';
   };
+
+  // ===================== CLIENTES =====================
 
   window.abrirModalCliente = function () {
     document.getElementById('modalTitulo').textContent = 'Nuevo cliente';
@@ -276,18 +319,11 @@
         fotoURL = await getDownloadURL(storageRef);
       }
       const datos = { nombre, telefono, direccion, cedula, fotoURL };
-      if (id) {
-        await updateDoc(doc(db, 'clientes', id), datos);
-      } else {
-        datos.fechaCreacion = Date.now();
-        await addDoc(collection(db, 'clientes'), datos);
-      }
+      if (id) { await updateDoc(doc(db, 'clientes', id), datos); }
+      else { datos.fechaCreacion = Date.now(); await addDoc(collection(db, 'clientes'), datos); }
       cerrarModalCliente();
-    } catch (error) {
-      alert('Error al guardar: ' + error.message);
-    } finally {
-      boton.disabled = false; boton.textContent = 'Guardar cliente';
-    }
+    } catch (error) { alert('Error al guardar: ' + error.message); }
+    finally { boton.disabled = false; boton.textContent = 'Guardar cliente'; }
   };
 
   window.editarCliente = function (id) {
@@ -321,10 +357,7 @@
 
   function renderizarClientes() {
     const contenedor = document.getElementById('listaClientes');
-    if (clientesCache.length === 0) {
-      contenedor.innerHTML = '<div class="empty-msg">Aún no hay clientes. Toca + para agregar uno.</div>';
-      return;
-    }
+    if (clientesCache.length === 0) { contenedor.innerHTML = '<div class="empty-msg">Aún no hay clientes. Toca + para agregar uno.</div>'; return; }
     contenedor.innerHTML = clientesCache.map(c => `
       <div class="cliente-item">
         <img class="cliente-foto" src="${c.fotoURL || ''}" onerror="this.style.background='#ddd'">
@@ -339,10 +372,14 @@
   }
 
   function llenarSelectClientes() {
-    const select = document.getElementById('prestamoCliente');
-    if (clientesCache.length === 0) { select.innerHTML = '<option value="">Primero agrega un cliente</option>'; return; }
-    select.innerHTML = clientesCache.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    const opciones = clientesCache.length === 0
+      ? '<option value="">Primero agrega un cliente</option>'
+      : clientesCache.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    document.getElementById('prestamoCliente').innerHTML = opciones;
+    document.getElementById('empenoCliente').innerHTML = opciones;
   }
+
+  // ===================== PRESTAMOS =====================
 
   window.abrirModalPrestamo = function () {
     if (clientesCache.length === 0) { alert('Primero agrega al menos un cliente.'); return; }
@@ -366,9 +403,9 @@
     document.getElementById('prestamoId').value = p.id;
     document.getElementById('prestamoCliente').value = p.clienteId;
     document.getElementById('prestamoCliente').disabled = true;
-    document.getElementById('prestamoMonto').value = p.capital;
+    document.getElementById('prestamoMonto').value = p.tipoPlan === 'cuotas' ? p.capital : p.saldoCapitalPendiente;
     document.getElementById('prestamoInteres').value = p.interesPorcentaje;
-    document.getElementById('prestamoCantPagos').value = p.cantidadPagos;
+    document.getElementById('prestamoCantPagos').value = p.tipoPlan === 'cuotas' ? p.cantidadPagos : '';
     document.getElementById('prestamoFrecuencia').value = p.frecuencia || 'semanal';
     document.getElementById('prestamoFecha').value = p.fechaProximoPago;
     document.getElementById('prestamoNotas').value = p.notas || '';
@@ -381,16 +418,24 @@
   window.actualizarTotalPreview = function () {
     const capital = parseFloat(document.getElementById('prestamoMonto').value) || 0;
     const interes = parseFloat(document.getElementById('prestamoInteres').value) || 0;
-    const cantPagos = parseInt(document.getElementById('prestamoCantPagos').value) || 0;
+    const cantPagosRaw = document.getElementById('prestamoCantPagos').value;
+    const cantPagos = parseInt(cantPagosRaw) || 0;
     const frecuencia = document.getElementById('prestamoFrecuencia').value;
-    if (!capital || !cantPagos) { document.getElementById('totalPreview').textContent = 'Completa los datos para ver el plan'; return; }
-    const interesTotal = capital * interes / 100;
-    const totalDeuda = capital + interesTotal;
-    const cuota = totalDeuda / cantPagos;
-    document.getElementById('totalPreview').innerHTML =
-      'Interés total: <strong>$' + interesTotal.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong><br>' +
-      'Total a pagar: <strong>$' + totalDeuda.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong><br>' +
-      'Plan: <strong>' + cantPagos + ' pagos ' + NOMBRES_FRECUENCIA[frecuencia].toLowerCase() + 'es de $' + cuota.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong>';
+    if (!capital) { document.getElementById('totalPreview').textContent = 'Completa los datos para ver el plan'; return; }
+    if (cantPagos > 0) {
+      const interesTotal = capital * interes / 100;
+      const totalDeuda = capital + interesTotal;
+      const cuota = totalDeuda / cantPagos;
+      document.getElementById('totalPreview').innerHTML =
+        'Interés total: <strong>$' + interesTotal.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong><br>' +
+        'Total a pagar: <strong>$' + totalDeuda.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong><br>' +
+        'Plan: <strong>' + cantPagos + ' pagos ' + NOMBRES_FRECUENCIA[frecuencia].toLowerCase() + 'es de $' + cuota.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong>';
+    } else {
+      const interesPeriodo = capital * interes / 100;
+      document.getElementById('totalPreview').innerHTML =
+        'Sin plazo fijo. Interés ' + NOMBRES_FRECUENCIA[frecuencia].toLowerCase() + ': <strong>$' + interesPeriodo.toLocaleString(undefined,{maximumFractionDigits:2}) + '</strong><br>' +
+        'El capital se abona cuando quieras.';
+    }
   };
 
   function avanzarFecha(fechaStr, frecuencia, periodos) {
@@ -418,44 +463,51 @@
     const clienteId = document.getElementById('prestamoCliente').value;
     const capital = parseFloat(document.getElementById('prestamoMonto').value);
     const interesPorcentaje = parseFloat(document.getElementById('prestamoInteres').value) || 0;
-    const cantidadPagos = parseInt(document.getElementById('prestamoCantPagos').value);
+    const cantPagosRaw = document.getElementById('prestamoCantPagos').value;
+    const cantidadPagos = parseInt(cantPagosRaw) || 0;
     const frecuencia = document.getElementById('prestamoFrecuencia').value;
     const fechaProximoPago = document.getElementById('prestamoFecha').value;
     const notas = document.getElementById('prestamoNotas').value.trim();
-    if (!clienteId || !capital || !cantidadPagos || !fechaProximoPago) { alert('Completa cliente, capital, cantidad de pagos y fecha.'); return; }
+    if (!clienteId || !capital || !fechaProximoPago) { alert('Completa cliente, capital y fecha.'); return; }
     const cliente = clientesCache.find(c => c.id === clienteId);
     const boton = document.getElementById('btnGuardarPrestamo');
     boton.disabled = true; boton.textContent = 'Guardando...';
     try {
       if (id) {
-        await updateDoc(doc(db, 'prestamos', id), { interesPorcentaje, cantidadPagos, frecuencia, fechaProximoPago, notas });
-      } else {
+        await updateDoc(doc(db, 'prestamos', id), { interesPorcentaje, frecuencia, fechaProximoPago, notas });
+      } else if (cantidadPagos > 0) {
         const interesTotal = capital * interesPorcentaje / 100;
         const totalDeuda = capital + interesTotal;
-        const capitalPorCuota = capital / cantidadPagos;
-        const interesPorCuota = interesTotal / cantidadPagos;
-        const cuotaFija = totalDeuda / cantidadPagos;
         await addDoc(collection(db, 'prestamos'), {
           clienteId, clienteNombre: cliente ? cliente.nombre : 'Cliente',
+          tipoPlan: 'cuotas',
           capital, interesPorcentaje, cantidadPagos, cuotasPagadas: 0,
-          capitalPorCuota, interesPorCuota, cuotaFija,
+          capitalPorCuota: capital / cantidadPagos,
+          interesPorCuota: interesTotal / cantidadPagos,
+          cuotaFija: totalDeuda / cantidadPagos,
+          saldoCapitalPendiente: capital, frecuencia, fechaProximoPago, notas,
+          estado: 'activo', fechaCreacion: Date.now()
+        });
+      } else {
+        await addDoc(collection(db, 'prestamos'), {
+          clienteId, clienteNombre: cliente ? cliente.nombre : 'Cliente',
+          tipoPlan: 'abierto',
+          capital, interesPorcentaje,
           saldoCapitalPendiente: capital, frecuencia, fechaProximoPago, notas,
           estado: 'activo', fechaCreacion: Date.now()
         });
       }
       cerrarModalPrestamo();
-    } catch (error) {
-      alert('Error al guardar: ' + error.message);
-    } finally {
-      boton.disabled = false; boton.textContent = 'Guardar préstamo';
-    }
+    } catch (error) { alert('Error al guardar: ' + error.message); }
+    finally { boton.disabled = false; boton.textContent = 'Guardar préstamo'; }
   };
 
   window.pagarInteres = async function (id) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
     const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-    const montoInteres = periodos * p.interesPorCuota;
+    const interesUnitario = p.tipoPlan === 'cuotas' ? p.interesPorCuota : (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
+    const montoInteres = periodos * interesUnitario;
     const avisoAtraso = periodos > 1 ? ' (incluye ' + periodos + ' períodos acumulados)' : '';
     if (!confirm('¿Confirmar pago de solo interés de $' + montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2}) + avisoAtraso + '? El capital no se toca.')) return;
     try {
@@ -503,6 +555,25 @@
     } catch (error) { alert('Error: ' + error.message); }
   };
 
+  window.abonarCapital = async function (id) {
+    const p = prestamosCache.find(x => x.id === id);
+    if (!p) return;
+    const abono = parseFloat(prompt('Capital pendiente: $' + p.saldoCapitalPendiente + '\n¿Cuánto capital va a pagar?'));
+    if (!abono || abono <= 0) return;
+    const nuevoSaldo = Math.max(0, p.saldoCapitalPendiente - abono);
+    try {
+      await updateDoc(doc(db, 'prestamos', id), {
+        saldoCapitalPendiente: nuevoSaldo,
+        estado: nuevoSaldo === 0 ? 'pagado' : 'activo'
+      });
+      await addDoc(collection(db, 'pagos'), {
+        prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
+        tipo: 'capital', monto: abono, montoCapital: abono, montoInteres: 0, fechaPago: Date.now()
+      });
+      mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Abono a capital', monto: abono, saldo: nuevoSaldo, proximoPago: p.fechaProximoPago });
+    } catch (error) { alert('Error: ' + error.message); }
+  };
+
   window.eliminarPrestamo = async function (id) {
     if (!confirm('¿Eliminar este préstamo?')) return;
     try { await deleteDoc(doc(db, 'prestamos', id)); } catch (error) { alert('Error al eliminar: ' + error.message); }
@@ -547,31 +618,160 @@
     }
     contenedor.innerHTML = prestamosCache.map(p => {
       let badge = '';
-      if (p.estado === 'pagado') {
-        badge = '<span class="badge badge-gris">Pagado</span>';
-      } else {
+      if (p.estado === 'pagado') { badge = '<span class="badge badge-gris">Pagado</span>'; }
+      else {
         const estado = calcularEstadoFecha(p.fechaProximoPago);
         if (estado === 'atrasado') badge = '<span class="badge badge-rojo">Atrasado</span>';
         else if (estado === 'hoy') badge = '<span class="badge badge-naranja">Vence hoy</span>';
         else badge = '<span class="badge badge-verde">Al día</span>';
       }
       const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-      const montoCuota = Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.cuotaFija;
-      const montoInteresSolo = periodos * p.interesPorCuota;
       const frecLabel = NOMBRES_FRECUENCIA[p.frecuencia] || p.frecuencia;
+      const esCuotas = p.tipoPlan === 'cuotas';
+      const interesUnitario = esCuotas ? p.interesPorCuota : (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
+      const montoInteresSolo = periodos * interesUnitario;
+      const detalle = esCuotas
+        ? 'Capital pendiente · Cuota ' + p.cuotasPagadas + ' de ' + p.cantidadPagos + ' · $' + p.cuotaFija.toLocaleString(undefined,{maximumFractionDigits:2}) + ' ' + frecLabel.toLowerCase()
+        : 'Capital pendiente · Sin plazo fijo · ' + p.interesPorcentaje + '% ' + frecLabel.toLowerCase();
+      const lineaAccion = esCuotas
+        ? 'Cuota a pagar: $' + (Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.cuotaFija).toLocaleString(undefined, {maximumFractionDigits: 2}) + ' · Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2})
+        : 'Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2});
+      const botones = p.estado !== 'pagado'
+        ? (esCuotas
+            ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>'
+            : '<button class="btn-ok" onclick="abonarCapital(\'' + p.id + '\')">Abonar capital</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>')
+        : '';
       return '<div class="prestamo-item">' +
         '<div class="prestamo-top"><div class="prestamo-nombre">' + p.clienteNombre + '</div><div class="prestamo-monto">$' + Number(p.saldoCapitalPendiente).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div></div>' +
-        '<div class="prestamo-detalle">Capital pendiente · Cuota ' + p.cuotasPagadas + ' de ' + p.cantidadPagos + ' · $' + p.cuotaFija.toLocaleString(undefined,{maximumFractionDigits:2}) + ' ' + frecLabel.toLowerCase() + '</div>' +
-        (p.estado !== 'pagado' ? '<div class="prestamo-interes-linea">Cuota a pagar: $' + montoCuota.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' · Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div>' : '') +
+        '<div class="prestamo-detalle">' + detalle + '</div>' +
+        (p.estado !== 'pagado' ? '<div class="prestamo-interes-linea">' + lineaAccion + '</div>' : '') +
         (p.estado !== 'pagado' && periodos > 1 ? '<div class="prestamo-atraso-linea">⚠️ ' + periodos + ' períodos acumulados sin pagar</div>' : '') +
         '<div class="prestamo-fecha">Próximo pago: ' + p.fechaProximoPago + (p.notas ? ' · ' + p.notas : '') + '</div>' +
         badge +
-        '<div class="prestamo-acciones">' +
-        (p.estado !== 'pagado' ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>' : '') +
-        '<button class="btn-danger" onclick="eliminarPrestamo(\'' + p.id + '\')">Eliminar</button>' +
+        '<div class="prestamo-acciones">' + botones + '<button class="btn-danger" onclick="eliminarPrestamo(\'' + p.id + '\')">Eliminar</button></div></div>';
+    }).join('');
+  }
+
+  // ===================== EMPEÑOS =====================
+
+  window.abrirModalEmpeno = function () {
+    if (clientesCache.length === 0) { alert('Primero agrega al menos un cliente.'); return; }
+    document.getElementById('modalTituloEmpeno').textContent = 'Nuevo empeño';
+    document.getElementById('empenoId').value = '';
+    document.getElementById('empenoCliente').disabled = false;
+    document.getElementById('empenoArticulo').value = '';
+    document.getElementById('empenoValor').value = '';
+    document.getElementById('empenoGanancia').value = '';
+    document.getElementById('empenoFecha').value = '';
+    document.getElementById('empenoNotas').value = '';
+    document.getElementById('previewFotoEmpeno').style.display = 'none';
+    document.getElementById('previewFotoEmpeno').src = '';
+    archivoFotoEmpenoSeleccionado = null;
+    fotoUrlEmpenoActual = null;
+    document.getElementById('modalEmpeno').classList.add('active');
+  };
+
+  window.cerrarModalEmpeno = function () { document.getElementById('modalEmpeno').classList.remove('active'); };
+
+  window.previsualizarFotoEmpeno = function (event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    archivoFotoEmpenoSeleccionado = file;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const img = document.getElementById('previewFotoEmpeno');
+      img.src = e.target.result;
+      img.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.guardarEmpeno = async function () {
+    const clienteId = document.getElementById('empenoCliente').value;
+    const articulo = document.getElementById('empenoArticulo').value.trim();
+    const valor = parseFloat(document.getElementById('empenoValor').value);
+    const ganancia = parseFloat(document.getElementById('empenoGanancia').value) || 0;
+    const fechaLimite = document.getElementById('empenoFecha').value;
+    const notas = document.getElementById('empenoNotas').value.trim();
+    if (!clienteId || !articulo || !valor || !fechaLimite) { alert('Completa cliente, artículo, valor y fecha límite.'); return; }
+    const cliente = clientesCache.find(c => c.id === clienteId);
+    const boton = document.getElementById('btnGuardarEmpeno');
+    boton.disabled = true; boton.textContent = 'Guardando...';
+    try {
+      let fotoURL = fotoUrlEmpenoActual || '';
+      if (archivoFotoEmpenoSeleccionado) {
+        const nombreArchivo = 'empenos/' + Date.now() + '_' + archivoFotoEmpenoSeleccionado.name;
+        const storageRef = ref(storage, nombreArchivo);
+        await uploadBytes(storageRef, archivoFotoEmpenoSeleccionado);
+        fotoURL = await getDownloadURL(storageRef);
+      }
+      await addDoc(collection(db, 'empenos'), {
+        clienteId, clienteNombre: cliente ? cliente.nombre : 'Cliente',
+        articulo, fotoURL, valor, ganancia, fechaLimite, notas,
+        estado: 'activo', fechaCreacion: Date.now()
+      });
+      cerrarModalEmpeno();
+    } catch (error) { alert('Error al guardar: ' + error.message); }
+    finally { boton.disabled = false; boton.textContent = 'Guardar empeño'; }
+  };
+
+  window.marcarRecuperado = async function (id) {
+    const e = empenosCache.find(x => x.id === id);
+    if (!e) return;
+    const total = Number(e.valor) + Number(e.ganancia || 0);
+    if (!confirm('¿Confirmar que el cliente recuperó "' + e.articulo + '" pagando $' + total.toLocaleString(undefined,{maximumFractionDigits:2}) + '?')) return;
+    try { await updateDoc(doc(db, 'empenos', id), { estado: 'recuperado' }); }
+    catch (error) { alert('Error: ' + error.message); }
+  };
+
+  window.marcarPerdido = async function (id) {
+    if (!confirm('¿Marcar este artículo como no recuperado (se queda contigo)?')) return;
+    try { await updateDoc(doc(db, 'empenos', id), { estado: 'perdido' }); }
+    catch (error) { alert('Error: ' + error.message); }
+  };
+
+  window.eliminarEmpeno = async function (id) {
+    if (!confirm('¿Eliminar este empeño?')) return;
+    try { await deleteDoc(doc(db, 'empenos', id)); } catch (error) { alert('Error al eliminar: ' + error.message); }
+  };
+
+  const qEmpenos = query(collection(db, 'empenos'), orderBy('fechaLimite', 'asc'));
+  onSnapshot(qEmpenos, (snapshot) => {
+    empenosCache = [];
+    snapshot.forEach(docSnap => { empenosCache.push({ id: docSnap.id, ...docSnap.data() }); });
+    renderizarEmpenos();
+  });
+
+  function renderizarEmpenos() {
+    const contenedor = document.getElementById('listaEmpenos');
+    if (empenosCache.length === 0) { contenedor.innerHTML = '<div class="empty-msg">Aún no hay empeños. Toca + para agregar uno.</div>'; return; }
+    contenedor.innerHTML = empenosCache.map(e => {
+      let badge = '';
+      if (e.estado === 'recuperado') badge = '<span class="badge badge-verde">Recuperado</span>';
+      else if (e.estado === 'perdido') badge = '<span class="badge badge-gris">No recuperado</span>';
+      else {
+        const estado = calcularEstadoFecha(e.fechaLimite);
+        if (estado === 'atrasado') badge = '<span class="badge badge-rojo">Vencido</span>';
+        else if (estado === 'hoy') badge = '<span class="badge badge-naranja">Vence hoy</span>';
+        else badge = '<span class="badge badge-verde">Activo</span>';
+      }
+      const total = Number(e.valor) + Number(e.ganancia || 0);
+      const botones = e.estado === 'activo'
+        ? '<button class="btn-ok" onclick="marcarRecuperado(\'' + e.id + '\')">Recuperado</button><button class="btn-interes" onclick="marcarPerdido(\'' + e.id + '\')">No recuperado</button>'
+        : '';
+      return '<div class="empeno-item">' +
+        '<img class="empeno-foto" src="' + (e.fotoURL || '') + '" onerror="this.style.background=\'#ddd\'">' +
+        '<div class="empeno-info">' +
+        '<div class="empeno-titulo">' + e.articulo + '</div>' +
+        '<div class="empeno-sub">' + e.clienteNombre + ' · Prestado: $' + Number(e.valor).toLocaleString(undefined,{maximumFractionDigits:2}) + ' · Total a recuperar: $' + total.toLocaleString(undefined,{maximumFractionDigits:2}) + '</div>' +
+        '<div class="empeno-sub">Fecha límite: ' + e.fechaLimite + (e.notas ? ' · ' + e.notas : '') + '</div>' +
+        badge +
+        '<div class="prestamo-acciones">' + botones + '<button class="btn-danger" onclick="eliminarEmpeno(\'' + e.id + '\')">Eliminar</button></div>' +
         '</div></div>';
     }).join('');
   }
+
+  // ===================== PAGOS / RESUMEN =====================
 
   const qPagos = query(collection(db, 'pagos'), orderBy('fechaPago', 'desc'));
   onSnapshot(qPagos, (snapshot) => {
@@ -583,7 +783,7 @@
 
   function renderizarResumen() {
     const capitalInvertido = prestamosCache.filter(p => p.estado !== 'pagado').reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
-    const capitalRecuperado = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
+    const capitalRecuperado = pagosCache.filter(p => p.tipo === 'cuota' || p.tipo === 'capital').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
     const gananciasCuotas = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes').reduce((sum, p) => sum + Number(p.monto || 0), 0);
     const ganancias = gananciasCuotas + gananciasInteres;
@@ -598,7 +798,7 @@
     contenedor.innerHTML = pagosCache.map(p => {
       const fecha = new Date(p.fechaPago);
       const fechaTexto = fecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
-      const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : 'Cuota (capital+interés)';
+      const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : (p.tipo === 'cuota' ? 'Cuota (capital+interés)' : 'Abono a capital');
       return '<div class="pago-item"><div class="pago-info"><div class="pago-nombre">' + p.clienteNombre + '</div><div class="pago-detalle">' + tipoTexto + ' · ' + fechaTexto + '</div></div>' +
         '<div class="pago-monto ' + p.tipo + '">$' + Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div>' +
         '<button class="btn-danger" onclick="eliminarPago(\'' + p.id + '\')">Eliminar</button></div>';
@@ -621,11 +821,16 @@
             saldoCapitalPendiente: nuevoSaldoCapital, cuotasPagadas: nuevasCuotasPagadas,
             fechaProximoPago: pago.fechaAnterior, estado: 'activo'
           });
+        } else if (pago.tipo === 'capital') {
+          const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
+          await updateDoc(doc(db, 'prestamos', pago.prestamoId), { saldoCapitalPendiente: nuevoSaldoCapital, estado: 'activo' });
         }
       }
       await deleteDoc(doc(db, 'pagos', id));
     } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
+
+  // ===================== RECIBO =====================
 
   window.mostrarRecibo = function (datos) {
     const ahora = new Date();
@@ -641,6 +846,9 @@
     if (datos.cuotas) {
       lineaCuotas.style.display = 'flex'; lineaSaldo.style.display = 'flex';
       document.getElementById('reciboCuotas').textContent = datos.cuotas;
+      document.getElementById('reciboSaldo').textContent = '$' + Number(datos.saldo).toLocaleString(undefined, {maximumFractionDigits: 2});
+    } else if (datos.saldo != null) {
+      lineaCuotas.style.display = 'none'; lineaSaldo.style.display = 'flex';
       document.getElementById('reciboSaldo').textContent = '$' + Number(datos.saldo).toLocaleString(undefined, {maximumFractionDigits: 2});
     } else {
       lineaCuotas.style.display = 'none'; lineaSaldo.style.display = 'none';
