@@ -9,7 +9,6 @@
   body { font-family: -apple-system, Arial, sans-serif; background: #f2f2f7; color: #1c1c1e; }
   header.topbar { background: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; }
   header.topbar h2 { font-size: 18px; }
-  header.topbar .btn-print { background: none; border: none; font-size: 22px; }
   main { padding: 20px; padding-bottom: 90px; }
   nav.tabbar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-around; padding: 10px 0; }
   nav.tabbar button { background: none; border: none; font-size: 12px; color: #8e8e93; display: flex; flex-direction: column; align-items: center; }
@@ -21,10 +20,9 @@
   .btn-edit { color: #007aff; background: none; border: none; font-size: 14px; margin-right: 12px; }
   .btn-ok { color: #34c759; background: none; border: none; font-size: 14px; margin-right: 12px; }
   .btn-interes { color: #c96a00; background: none; border: none; font-size: 14px; margin-right: 12px; }
+  .btn-print { color: #5856d6; background: none; border: none; font-size: 14px; margin-right: 12px; }
   input, textarea, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
   label { font-size: 13px; color: #666; display: block; margin-bottom: 4px; }
-  .checklabel { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 15px; }
-  .checklabel input { width: auto; margin: 0; }
   .fab { position: fixed; bottom: 90px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #007aff; color: white; font-size: 28px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
   .cliente-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
   .cliente-item:last-child { border-bottom: none; }
@@ -72,14 +70,16 @@
   .resumen-valor.azul { color: #007aff; }
   .resumen-valor.verde { color: #1a7d3c; }
   .resumen-valor.naranja { color: #c96a00; }
-  .pago-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
+  .pago-item { padding: 12px 0; border-bottom: 1px solid #eee; }
   .pago-item:last-child { border-bottom: none; }
+  .pago-top { display: flex; justify-content: space-between; align-items: center; }
   .pago-info { flex: 1; }
   .pago-nombre { font-weight: 600; font-size: 14px; }
   .pago-detalle { font-size: 12px; color: #666; margin-top: 2px; }
-  .pago-monto { font-weight: 700; font-size: 15px; margin-right: 10px; }
+  .pago-monto { font-weight: 700; font-size: 15px; }
   .pago-monto.interes { color: #c96a00; }
   .pago-monto.cuota, .pago-monto.capital { color: #1a7d3c; }
+  .pago-acciones { margin-top: 6px; }
   .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
   .empeno-item { display: flex; padding: 12px 0; border-bottom: 1px solid #eee; }
   .empeno-item:last-child { border-bottom: none; }
@@ -93,10 +93,6 @@
   .recibo-total { display: flex; justify-content: space-between; padding: 12px 0; font-size: 17px; font-weight: 700; border-top: 2px solid #333; margin-top: 6px; }
   .recibo-titulo { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
   .recibo-sub { text-align: center; font-size: 12px; color: #888; margin-bottom: 16px; }
-  .imp-tabla { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
-  .imp-tabla th, .imp-tabla td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
-  .imp-tabla th { background: #eee; }
-  .imp-seccion-h { font-size: 16px; font-weight: 700; margin: 16px 0 8px; }
   @media print {
     body * { visibility: hidden; }
     #reciboImprimir, #reciboImprimir * { visibility: visible; }
@@ -107,10 +103,7 @@
 </head>
 <body>
 
-<header class="topbar">
-  <h2 id="tituloSeccion">Clientes</h2>
-  <button class="btn-print" onclick="abrirModalImprimir()">🖨️</button>
-</header>
+<header class="topbar"><h2 id="tituloSeccion">Clientes</h2></header>
 
 <main>
   <div id="seccionClientes">
@@ -220,32 +213,20 @@
 
 <div class="modal-overlay" id="modalRecibo">
   <div class="modal-content">
-    <div class="modal-header no-imprimir"><h3>Recibo de pago</h3><button class="modal-close" onclick="cerrarModalRecibo()">✕</button></div>
+    <div class="modal-header no-imprimir"><h3>Recibo</h3><button class="modal-close" onclick="cerrarModalRecibo()">✕</button></div>
     <div id="reciboContenido">
       <div class="recibo-titulo">App de Préstamos</div>
       <div class="recibo-sub" id="reciboFechaTop"></div>
       <div class="recibo-linea"><span>Cliente</span><strong id="reciboCliente"></strong></div>
-      <div class="recibo-linea"><span>Tipo de pago</span><strong id="reciboTipo"></strong></div>
+      <div class="recibo-linea"><span>Tipo</span><strong id="reciboTipo"></strong></div>
       <div class="recibo-linea"><span>Fecha</span><strong id="reciboFecha"></strong></div>
       <div class="recibo-linea" id="reciboLineaCuotas"><span>Cuotas pagadas</span><strong id="reciboCuotas"></strong></div>
       <div class="recibo-linea" id="reciboLineaSaldo"><span>Saldo pendiente</span><strong id="reciboSaldo"></strong></div>
       <div class="recibo-linea" id="reciboLineaProximo"><span>Próximo cobro</span><strong id="reciboProximo"></strong></div>
-      <div class="recibo-total"><span>Total pagado</span><strong id="reciboMonto"></strong></div>
+      <div class="recibo-total"><span>Monto</span><strong id="reciboMonto"></strong></div>
     </div>
-    <button class="btn-primary no-imprimir" onclick="window.print()">🖨️ Imprimir recibo</button>
+    <button class="btn-primary no-imprimir" onclick="window.print()">🖨️ Imprimir</button>
     <button class="btn-primary no-imprimir" style="background:#8e8e93;" onclick="cerrarModalRecibo()">Cerrar</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modalImprimir">
-  <div class="modal-content">
-    <div class="modal-header"><h3>¿Qué quieres imprimir?</h3><button class="modal-close" onclick="cerrarModalImprimir()">✕</button></div>
-    <label class="checklabel"><input type="checkbox" id="chkResumen" checked> Resumen (capital y ganancias)</label>
-    <label class="checklabel"><input type="checkbox" id="chkClientes"> Lista de clientes</label>
-    <label class="checklabel"><input type="checkbox" id="chkPrestamos" checked> Préstamos activos</label>
-    <label class="checklabel"><input type="checkbox" id="chkEmpenos"> Empeños activos</label>
-    <label class="checklabel"><input type="checkbox" id="chkPagos"> Historial de pagos</label>
-    <button class="btn-primary" onclick="generarImpresion()">🖨️ Generar e imprimir</button>
   </div>
 </div>
 <div id="reciboImprimir"></div>
@@ -291,8 +272,6 @@
     document.getElementById('btnAgregarPrestamo').style.display = nombre === 'Prestamos' ? 'block' : 'none';
     document.getElementById('btnAgregarEmpeno').style.display = nombre === 'Empenos' ? 'block' : 'none';
   };
-
-  // ===================== CLIENTES =====================
 
   window.abrirModalCliente = function () {
     document.getElementById('modalTitulo').textContent = 'Nuevo cliente';
@@ -400,8 +379,6 @@
     document.getElementById('prestamoCliente').innerHTML = opciones;
     document.getElementById('empenoCliente').innerHTML = opciones;
   }
-
-  // ===================== PRESTAMOS =====================
 
   window.abrirModalPrestamo = function () {
     if (clientesCache.length === 0) { alert('Primero agrega al menos un cliente.'); return; }
@@ -540,7 +517,6 @@
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
         tipo: 'interes', monto: montoInteres, periodos, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
-      mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Pago de solo interés' + (periodos > 1 ? ' (' + periodos + ' períodos)' : ''), monto: montoInteres, proximoPago: nuevaFecha });
     } catch (error) { alert('Error: ' + error.message); }
   };
 
@@ -569,11 +545,6 @@
         tipo: 'cuota', monto: montoTotal, montoCapital, montoInteres, periodos,
         fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
-      mostrarRecibo({
-        clienteNombre: p.clienteNombre, tipo: 'Pago de cuota' + avisoAtraso, monto: montoTotal,
-        cuotas: nuevasCuotasPagadas + ' de ' + p.cantidadPagos, saldo: nuevoSaldoCapital,
-        proximoPago: pagoCompleto ? '—' : nuevaFecha
-      });
     } catch (error) { alert('Error: ' + error.message); }
   };
 
@@ -592,13 +563,29 @@
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
         tipo: 'capital', monto: abono, montoCapital: abono, montoInteres: 0, fechaPago: Date.now()
       });
-      mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Abono a capital', monto: abono, saldo: nuevoSaldo, proximoPago: p.fechaProximoPago });
     } catch (error) { alert('Error: ' + error.message); }
   };
 
   window.eliminarPrestamo = async function (id) {
     if (!confirm('¿Eliminar este préstamo?')) return;
     try { await deleteDoc(doc(db, 'prestamos', id)); } catch (error) { alert('Error al eliminar: ' + error.message); }
+  };
+
+  window.imprimirRecibopreStamo = function (id) {
+    const p = prestamosCache.find(x => x.id === id);
+    if (!p) return;
+    const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
+    const esCuotas = p.tipoPlan === 'cuotas';
+    const interesUnitario = esCuotas ? p.interesPorCuota : (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
+    const montoInteres = periodos * interesUnitario;
+    mostrarRecibo({
+      clienteNombre: p.clienteNombre,
+      tipo: 'Estado del préstamo',
+      monto: montoInteres,
+      cuotas: esCuotas ? (p.cuotasPagadas + ' de ' + p.cantidadPagos) : null,
+      saldo: p.saldoCapitalPendiente,
+      proximoPago: p.fechaProximoPago
+    });
   };
 
   const qPrestamos = query(collection(db, 'prestamos'), orderBy('fechaProximoPago', 'asc'));
@@ -629,9 +616,8 @@
     const activos = prestamosCache.filter(p => p.estado !== 'pagado');
     const atrasados = activos.filter(p => calcularEstadoFecha(p.fechaProximoPago) === 'atrasado');
     const hoy = activos.filter(p => calcularEstadoFecha(p.fechaProximoPago) === 'hoy');
-    if (atrasados.length === 0 && hoy.length === 0) {
-      alerta.classList.add('vacia');
-    } else {
+    if (atrasados.length === 0 && hoy.length === 0) { alerta.classList.add('vacia'); }
+    else {
       alerta.classList.remove('vacia');
       let texto = '';
       if (atrasados.length > 0) texto += '⚠️ <strong>' + atrasados.length + ' cliente(s) atrasado(s):</strong> ' + atrasados.map(p => p.clienteNombre).join(', ') + '. ';
@@ -658,7 +644,7 @@
       const lineaAccion = esCuotas
         ? 'Cuota a pagar: $' + (Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.cuotaFija).toLocaleString(undefined, {maximumFractionDigits: 2}) + ' · Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2})
         : 'Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2});
-      const botones = p.estado !== 'pagado'
+      const botonesPago = p.estado !== 'pagado'
         ? (esCuotas
             ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>'
             : '<button class="btn-ok" onclick="abonarCapital(\'' + p.id + '\')">Abonar capital</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>')
@@ -670,11 +656,11 @@
         (p.estado !== 'pagado' && periodos > 1 ? '<div class="prestamo-atraso-linea">⚠️ ' + periodos + ' períodos acumulados sin pagar</div>' : '') +
         '<div class="prestamo-fecha">Próximo pago: ' + p.fechaProximoPago + (p.notas ? ' · ' + p.notas : '') + '</div>' +
         badge +
-        '<div class="prestamo-acciones">' + botones + '<button class="btn-danger" onclick="eliminarPrestamo(\'' + p.id + '\')">Eliminar</button></div></div>';
+        '<div class="prestamo-acciones">' + botonesPago +
+        '<button class="btn-print" onclick="imprimirRecibopreStamo(\'' + p.id + '\')">🖨️ Recibo</button>' +
+        '<button class="btn-danger" onclick="eliminarPrestamo(\'' + p.id + '\')">Eliminar</button></div></div>';
     }).join('');
   }
-
-  // ===================== EMPEÑOS =====================
 
   window.abrirModalEmpeno = function () {
     if (clientesCache.length === 0) { alert('Primero agrega al menos un cliente.'); return; }
@@ -757,6 +743,18 @@
     try { await deleteDoc(doc(db, 'empenos', id)); } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
 
+  window.imprimirReciboEmpeno = function (id) {
+    const e = empenosCache.find(x => x.id === id);
+    if (!e) return;
+    const total = Number(e.valor) + Number(e.ganancia || 0);
+    mostrarRecibo({
+      clienteNombre: e.clienteNombre,
+      tipo: 'Empeño: ' + e.articulo,
+      monto: total,
+      proximoPago: e.fechaLimite
+    });
+  };
+
   const qEmpenos = query(collection(db, 'empenos'), orderBy('fechaLimite', 'asc'));
   onSnapshot(qEmpenos, (snapshot) => {
     empenosCache = [];
@@ -789,12 +787,12 @@
         '<div class="empeno-sub">' + e.clienteNombre + ' · Prestado: $' + Number(e.valor).toLocaleString(undefined,{maximumFractionDigits:2}) + ' · Total a recuperar: $' + total.toLocaleString(undefined,{maximumFractionDigits:2}) + '</div>' +
         '<div class="empeno-sub">Fecha límite: ' + e.fechaLimite + (e.notas ? ' · ' + e.notas : '') + '</div>' +
         badge +
-        '<div class="prestamo-acciones">' + botones + '<button class="btn-danger" onclick="eliminarEmpeno(\'' + e.id + '\')">Eliminar</button></div>' +
+        '<div class="prestamo-acciones">' + botones +
+        '<button class="btn-print" onclick="imprimirReciboEmpeno(\'' + e.id + '\')">🖨️ Recibo</button>' +
+        '<button class="btn-danger" onclick="eliminarEmpeno(\'' + e.id + '\')">Eliminar</button></div>' +
         '</div></div>';
     }).join('');
   }
-
-  // ===================== PAGOS / RESUMEN =====================
 
   const qPagos = query(collection(db, 'pagos'), orderBy('fechaPago', 'desc'));
   onSnapshot(qPagos, (snapshot) => {
@@ -808,16 +806,13 @@
     const capitalInvertidoPrestamos = prestamosCache.filter(p => p.estado !== 'pagado').reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
     const capitalInvertidoEmpenos = empenosCache.filter(e => e.estado === 'activo').reduce((sum, e) => sum + Number(e.valor || 0), 0);
     const capitalInvertido = capitalInvertidoPrestamos + capitalInvertidoEmpenos;
-
     const capitalRecuperadoPrestamos = pagosCache.filter(p => p.tipo === 'cuota' || p.tipo === 'capital').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
     const capitalRecuperadoEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.valor || 0), 0);
     const capitalRecuperado = capitalRecuperadoPrestamos + capitalRecuperadoEmpenos;
-
     const gananciasCuotas = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes').reduce((sum, p) => sum + Number(p.monto || 0), 0);
     const gananciasEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.ganancia || 0), 0);
     const ganancias = gananciasCuotas + gananciasInteres + gananciasEmpenos;
-
     document.getElementById('resCapitalInvertido').textContent = '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
     document.getElementById('resCapitalRecuperado').textContent = '$' + capitalRecuperado.toLocaleString(undefined, {maximumFractionDigits: 2});
     document.getElementById('resGanancias').textContent = '$' + ganancias.toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -830,11 +825,26 @@
       const fecha = new Date(p.fechaPago);
       const fechaTexto = fecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
       const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : (p.tipo === 'cuota' ? 'Cuota (capital+interés)' : 'Abono a capital');
-      return '<div class="pago-item"><div class="pago-info"><div class="pago-nombre">' + p.clienteNombre + '</div><div class="pago-detalle">' + tipoTexto + ' · ' + fechaTexto + '</div></div>' +
-        '<div class="pago-monto ' + p.tipo + '">$' + Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div>' +
-        '<button class="btn-danger" onclick="eliminarPago(\'' + p.id + '\')">Eliminar</button></div>';
+      return '<div class="pago-item"><div class="pago-top"><div class="pago-info"><div class="pago-nombre">' + p.clienteNombre + '</div><div class="pago-detalle">' + tipoTexto + ' · ' + fechaTexto + '</div></div>' +
+        '<div class="pago-monto ' + p.tipo + '">$' + Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div></div>' +
+        '<div class="pago-acciones"><button class="btn-print" onclick="imprimirReciboPago(\'' + p.id + '\')">🖨️ Recibo</button>' +
+        '<button class="btn-danger" onclick="eliminarPago(\'' + p.id + '\')">Eliminar</button></div></div>';
     }).join('');
   }
+
+  window.imprimirReciboPago = function (id) {
+    const p = pagosCache.find(x => x.id === id);
+    if (!p) return;
+    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : 'Abono a capital');
+    mostrarRecibo({
+      clienteNombre: p.clienteNombre,
+      tipo: tipoTexto,
+      monto: p.monto,
+      cuotas: null,
+      saldo: null,
+      proximoPago: p.fechaNueva || ''
+    });
+  };
 
   window.eliminarPago = async function (id) {
     const pago = pagosCache.find(p => p.id === id);
@@ -860,8 +870,6 @@
       await deleteDoc(doc(db, 'pagos', id));
     } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
-
-  // ===================== RECIBO =====================
 
   window.mostrarRecibo = function (datos) {
     const ahora = new Date();
@@ -891,72 +899,6 @@
   };
 
   window.cerrarModalRecibo = function () { document.getElementById('modalRecibo').classList.remove('active'); };
-
-  // ===================== IMPRIMIR PERSONALIZADO =====================
-
-  window.abrirModalImprimir = function () { document.getElementById('modalImprimir').classList.add('active'); };
-  window.cerrarModalImprimir = function () { document.getElementById('modalImprimir').classList.remove('active'); };
-
-  window.generarImpresion = function () {
-    const incluirResumen = document.getElementById('chkResumen').checked;
-    const incluirClientes = document.getElementById('chkClientes').checked;
-    const incluirPrestamos = document.getElementById('chkPrestamos').checked;
-    const incluirEmpenos = document.getElementById('chkEmpenos').checked;
-    const incluirPagos = document.getElementById('chkPagos').checked;
-
-    let html = '<div class="recibo-titulo">App de Préstamos — Reporte</div>';
-    html += '<div class="recibo-sub">' + new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' }) + '</div>';
-
-    if (incluirResumen) {
-      html += '<div class="imp-seccion-h">Resumen</div>';
-      html += '<div class="recibo-linea"><span>Capital invertido (activo)</span><strong>' + document.getElementById('resCapitalInvertido').textContent + '</strong></div>';
-      html += '<div class="recibo-linea"><span>Capital recuperado</span><strong>' + document.getElementById('resCapitalRecuperado').textContent + '</strong></div>';
-      html += '<div class="recibo-linea"><span>Ganancias totales</span><strong>' + document.getElementById('resGanancias').textContent + '</strong></div>';
-    }
-
-    if (incluirClientes) {
-      html += '<div class="imp-seccion-h">Clientes (' + clientesCache.length + ')</div>';
-      html += '<table class="imp-tabla"><tr><th>Nombre</th><th>Teléfono</th><th>Cédula</th></tr>';
-      clientesCache.forEach(c => { html += '<tr><td>' + c.nombre + '</td><td>' + (c.telefono || '') + '</td><td>' + (c.cedula || '') + '</td></tr>'; });
-      html += '</table>';
-    }
-
-    if (incluirPrestamos) {
-      const activos = prestamosCache.filter(p => p.estado !== 'pagado');
-      html += '<div class="imp-seccion-h">Préstamos activos (' + activos.length + ')</div>';
-      html += '<table class="imp-tabla"><tr><th>Cliente</th><th>Saldo pendiente</th><th>Próximo pago</th><th>Plan</th></tr>';
-      activos.forEach(p => {
-        const plan = p.tipoPlan === 'cuotas' ? ('Cuota ' + p.cuotasPagadas + '/' + p.cantidadPagos) : 'Sin plazo fijo';
-        html += '<tr><td>' + p.clienteNombre + '</td><td>$' + Number(p.saldoCapitalPendiente).toLocaleString(undefined,{maximumFractionDigits:2}) + '</td><td>' + p.fechaProximoPago + '</td><td>' + plan + '</td></tr>';
-      });
-      html += '</table>';
-    }
-
-    if (incluirEmpenos) {
-      const activos = empenosCache.filter(e => e.estado === 'activo');
-      html += '<div class="imp-seccion-h">Empeños activos (' + activos.length + ')</div>';
-      html += '<table class="imp-tabla"><tr><th>Cliente</th><th>Artículo</th><th>Valor</th><th>Fecha límite</th></tr>';
-      activos.forEach(e => {
-        html += '<tr><td>' + e.clienteNombre + '</td><td>' + e.articulo + '</td><td>$' + Number(e.valor).toLocaleString(undefined,{maximumFractionDigits:2}) + '</td><td>' + e.fechaLimite + '</td></tr>';
-      });
-      html += '</table>';
-    }
-
-    if (incluirPagos) {
-      html += '<div class="imp-seccion-h">Historial de pagos (' + pagosCache.length + ')</div>';
-      html += '<table class="imp-tabla"><tr><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Fecha</th></tr>';
-      pagosCache.forEach(p => {
-        const tipoTexto = p.tipo === 'interes' ? 'Interés' : (p.tipo === 'cuota' ? 'Cuota' : 'Abono capital');
-        const fechaTexto = new Date(p.fechaPago).toLocaleDateString('es-DO');
-        html += '<tr><td>' + p.clienteNombre + '</td><td>' + tipoTexto + '</td><td>$' + Number(p.monto).toLocaleString(undefined,{maximumFractionDigits:2}) + '</td><td>' + fechaTexto + '</td></tr>';
-      });
-      html += '</table>';
-    }
-
-    document.getElementById('reciboImprimir').innerHTML = html;
-    cerrarModalImprimir();
-    setTimeout(() => window.print(), 200);
-  };
 </script>
 
 </body>
