@@ -941,7 +941,6 @@
   };
 
   window.cerrarModalRecibo = function () { document.getElementById('modalRecibo').classList.remove('active'); };
-
   window.imprimirLimpio = function () {
     if (!datosReciboActual) return;
     const html = document.getElementById('reciboContenido').innerHTML;
@@ -956,7 +955,11 @@
       '.recibo-sub { text-align: center; font-size: 9px; color: #555; margin-bottom: 8px; }' +
       '.recibo-linea { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed #999; font-size: 10px; }' +
       '.recibo-total { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; font-weight: 700; border-top: 2px solid #000; margin-top: 4px; }' +
-      '</style></head><body>' + html + '</body></html>'
+      '.btn-cerrar { display:block; width: 100%; margin-top: 20px; padding: 12px; background:#007aff; color:white; border:none; border-radius:8px; font-size:14px; }' +
+      '@media print { .btn-cerrar { display: none !important; } }' +
+      '</style></head><body>' + html +
+      '<button class="btn-cerrar" onclick="window.close()">Cerrar esta ventana</button>' +
+      '</body></html>'
     );
     ventana.document.close();
     setTimeout(function () {
@@ -964,6 +967,7 @@
       ventana.print();
     }, 300);
   };
+
 </script>
 
 </body>
