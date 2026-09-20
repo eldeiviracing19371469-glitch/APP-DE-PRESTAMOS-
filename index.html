@@ -89,30 +89,11 @@
   .empeno-info { flex: 1; }
   .empeno-titulo { font-weight: 600; font-size: 15px; }
   .empeno-sub { font-size: 13px; color: #666; margin-top: 2px; }
-  #reciboImprimir { display: none; }
   .recibo-linea { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #ddd; font-size: 14px; }
   .recibo-linea strong { text-align: right; }
   .recibo-total { display: flex; justify-content: space-between; padding: 12px 0; font-size: 17px; font-weight: 700; border-top: 2px solid #333; margin-top: 6px; }
   .recibo-titulo { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
   .recibo-sub { text-align: center; font-size: 12px; color: #888; margin-bottom: 16px; }
-
-  @media print {
-    @page { size: 58mm auto; margin: 0; }
-    html, body { width: 58mm; }
-    body * { display: none !important; }
-    #reciboImprimir {
-      display: block !important;
-      width: 58mm;
-      max-width: 58mm;
-      padding: 2mm;
-      font-size: 10px;
-      line-height: 1.3;
-    }
-    #reciboImprimir .recibo-titulo { font-size: 12px; margin-bottom: 2px; }
-    #reciboImprimir .recibo-sub { font-size: 9px; margin-bottom: 8px; }
-    #reciboImprimir .recibo-linea { font-size: 10px; padding: 3px 0; }
-    #reciboImprimir .recibo-total { font-size: 12px; padding: 6px 0; }
-  }
 </style>
 </head>
 <body>
@@ -237,7 +218,7 @@
 
 <div class="modal-overlay" id="modalRecibo">
   <div class="modal-content">
-    <div class="modal-header no-imprimir"><h3>Recibo</h3><button class="modal-close" onclick="cerrarModalRecibo()">✕</button></div>
+    <div class="modal-header"><h3>Recibo</h3><button class="modal-close" onclick="cerrarModalRecibo()">✕</button></div>
     <div id="reciboContenido">
       <div class="recibo-titulo">App de Préstamos</div>
       <div class="recibo-sub" id="reciboFechaTop"></div>
@@ -249,11 +230,10 @@
       <div class="recibo-linea" id="reciboLineaProximo"><span>Próximo cobro</span><strong id="reciboProximo"></strong></div>
       <div class="recibo-total"><span>Monto</span><strong id="reciboMonto"></strong></div>
     </div>
-    <button class="btn-primary no-imprimir" onclick="window.print()">🖨️ Imprimir</button>
-    <button class="btn-primary no-imprimir" style="background:#8e8e93;" onclick="cerrarModalRecibo()">Cerrar</button>
+    <button class="btn-primary" onclick="imprimirLimpio()">🖨️ Imprimir</button>
+    <button class="btn-primary" style="background:#8e8e93;" onclick="cerrarModalRecibo()">Cerrar</button>
   </div>
 </div>
-<div id="reciboImprimir"></div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -931,7 +911,10 @@
     } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
 
+  let datosReciboActual = null;
+
   window.mostrarRecibo = function (datos) {
+    datosReciboActual = datos;
     const ahora = new Date();
     const fechaTexto = ahora.toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' }) + ' · ' + ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
     document.getElementById('reciboFechaTop').textContent = fechaTexto;
@@ -954,11 +937,33 @@
     }
     lineaProximo.style.display = 'flex';
     document.getElementById('reciboProximo').textContent = datos.proximoPago || '';
-    document.getElementById('reciboImprimir').innerHTML = document.getElementById('reciboContenido').innerHTML;
     document.getElementById('modalRecibo').classList.add('active');
   };
 
   window.cerrarModalRecibo = function () { document.getElementById('modalRecibo').classList.remove('active'); };
+
+  window.imprimirLimpio = function () {
+    if (!datosReciboActual) return;
+    const html = document.getElementById('reciboContenido').innerHTML;
+    const ventana = window.open('', '_blank');
+    if (!ventana) { alert('El navegador bloqueó la ventana. Permite ventanas emergentes para imprimir.'); return; }
+    ventana.document.write(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<style>' +
+      '@page { size: 58mm auto; margin: 0; }' +
+      'body { width: 58mm; margin: 0; padding: 2mm; font-family: Arial, sans-serif; font-size: 10px; line-height: 1.3; }' +
+      '.recibo-titulo { text-align: center; font-size: 12px; font-weight: 700; margin-bottom: 2px; }' +
+      '.recibo-sub { text-align: center; font-size: 9px; color: #555; margin-bottom: 8px; }' +
+      '.recibo-linea { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed #999; font-size: 10px; }' +
+      '.recibo-total { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; font-weight: 700; border-top: 2px solid #000; margin-top: 4px; }' +
+      '</style></head><body>' + html + '</body></html>'
+    );
+    ventana.document.close();
+    setTimeout(function () {
+      ventana.focus();
+      ventana.print();
+    }, 300);
+  };
 </script>
 
 </body>
