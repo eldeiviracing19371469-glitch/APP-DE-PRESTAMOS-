@@ -9,6 +9,7 @@
   body { font-family: -apple-system, Arial, sans-serif; background: #f2f2f7; color: #1c1c1e; }
   header.topbar { background: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; }
   header.topbar h2 { font-size: 18px; }
+  header.topbar .btn-print { background: none; border: none; font-size: 22px; }
   main { padding: 20px; padding-bottom: 90px; }
   nav.tabbar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-around; padding: 10px 0; }
   nav.tabbar button { background: none; border: none; font-size: 12px; color: #8e8e93; display: flex; flex-direction: column; align-items: center; }
@@ -22,6 +23,8 @@
   .btn-interes { color: #c96a00; background: none; border: none; font-size: 14px; margin-right: 12px; }
   input, textarea, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
   label { font-size: 13px; color: #666; display: block; margin-bottom: 4px; }
+  .checklabel { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 15px; }
+  .checklabel input { width: auto; margin: 0; }
   .fab { position: fixed; bottom: 90px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #007aff; color: white; font-size: 28px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
   .cliente-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
   .cliente-item:last-child { border-bottom: none; }
@@ -90,6 +93,10 @@
   .recibo-total { display: flex; justify-content: space-between; padding: 12px 0; font-size: 17px; font-weight: 700; border-top: 2px solid #333; margin-top: 6px; }
   .recibo-titulo { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
   .recibo-sub { text-align: center; font-size: 12px; color: #888; margin-bottom: 16px; }
+  .imp-tabla { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+  .imp-tabla th, .imp-tabla td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  .imp-tabla th { background: #eee; }
+  .imp-seccion-h { font-size: 16px; font-weight: 700; margin: 16px 0 8px; }
   @media print {
     body * { visibility: hidden; }
     #reciboImprimir, #reciboImprimir * { visibility: visible; }
@@ -100,7 +107,10 @@
 </head>
 <body>
 
-<header class="topbar"><h2 id="tituloSeccion">Clientes</h2></header>
+<header class="topbar">
+  <h2 id="tituloSeccion">Clientes</h2>
+  <button class="btn-print" onclick="abrirModalImprimir()">🖨️</button>
+</header>
 
 <main>
   <div id="seccionClientes">
@@ -114,7 +124,7 @@
     <div class="resumen-grid">
       <div class="resumen-box"><div class="resumen-label">Capital invertido (activo)</div><div class="resumen-valor azul" id="resCapitalInvertido">$0</div></div>
       <div class="resumen-box"><div class="resumen-label">Capital recuperado</div><div class="resumen-valor verde" id="resCapitalRecuperado">$0</div></div>
-      <div class="resumen-box full"><div class="resumen-label">Ganancias totales (interés cobrado)</div><div class="resumen-valor naranja" id="resGanancias">$0</div></div>
+      <div class="resumen-box full"><div class="resumen-label">Ganancias totales (interés + empeños)</div><div class="resumen-valor naranja" id="resGanancias">$0</div></div>
     </div>
     <div class="card">
       <div class="seccion-titulo">Historial de pagos</div>
@@ -224,6 +234,18 @@
     </div>
     <button class="btn-primary no-imprimir" onclick="window.print()">🖨️ Imprimir recibo</button>
     <button class="btn-primary no-imprimir" style="background:#8e8e93;" onclick="cerrarModalRecibo()">Cerrar</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalImprimir">
+  <div class="modal-content">
+    <div class="modal-header"><h3>¿Qué quieres imprimir?</h3><button class="modal-close" onclick="cerrarModalImprimir()">✕</button></div>
+    <label class="checklabel"><input type="checkbox" id="chkResumen" checked> Resumen (capital y ganancias)</label>
+    <label class="checklabel"><input type="checkbox" id="chkClientes"> Lista de clientes</label>
+    <label class="checklabel"><input type="checkbox" id="chkPrestamos" checked> Préstamos activos</label>
+    <label class="checklabel"><input type="checkbox" id="chkEmpenos"> Empeños activos</label>
+    <label class="checklabel"><input type="checkbox" id="chkPagos"> Historial de pagos</label>
+    <button class="btn-primary" onclick="generarImpresion()">🖨️ Generar e imprimir</button>
   </div>
 </div>
 <div id="reciboImprimir"></div>
@@ -740,6 +762,7 @@
     empenosCache = [];
     snapshot.forEach(docSnap => { empenosCache.push({ id: docSnap.id, ...docSnap.data() }); });
     renderizarEmpenos();
+    renderizarResumen();
   });
 
   function renderizarEmpenos() {
@@ -782,11 +805,19 @@
   });
 
   function renderizarResumen() {
-    const capitalInvertido = prestamosCache.filter(p => p.estado !== 'pagado').reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
-    const capitalRecuperado = pagosCache.filter(p => p.tipo === 'cuota' || p.tipo === 'capital').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
+    const capitalInvertidoPrestamos = prestamosCache.filter(p => p.estado !== 'pagado').reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
+    const capitalInvertidoEmpenos = empenosCache.filter(e => e.estado === 'activo').reduce((sum, e) => sum + Number(e.valor || 0), 0);
+    const capitalInvertido = capitalInvertidoPrestamos + capitalInvertidoEmpenos;
+
+    const capitalRecuperadoPrestamos = pagosCache.filter(p => p.tipo === 'cuota' || p.tipo === 'capital').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
+    const capitalRecuperadoEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.valor || 0), 0);
+    const capitalRecuperado = capitalRecuperadoPrestamos + capitalRecuperadoEmpenos;
+
     const gananciasCuotas = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes').reduce((sum, p) => sum + Number(p.monto || 0), 0);
-    const ganancias = gananciasCuotas + gananciasInteres;
+    const gananciasEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.ganancia || 0), 0);
+    const ganancias = gananciasCuotas + gananciasInteres + gananciasEmpenos;
+
     document.getElementById('resCapitalInvertido').textContent = '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
     document.getElementById('resCapitalRecuperado').textContent = '$' + capitalRecuperado.toLocaleString(undefined, {maximumFractionDigits: 2});
     document.getElementById('resGanancias').textContent = '$' + ganancias.toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -860,6 +891,72 @@
   };
 
   window.cerrarModalRecibo = function () { document.getElementById('modalRecibo').classList.remove('active'); };
+
+  // ===================== IMPRIMIR PERSONALIZADO =====================
+
+  window.abrirModalImprimir = function () { document.getElementById('modalImprimir').classList.add('active'); };
+  window.cerrarModalImprimir = function () { document.getElementById('modalImprimir').classList.remove('active'); };
+
+  window.generarImpresion = function () {
+    const incluirResumen = document.getElementById('chkResumen').checked;
+    const incluirClientes = document.getElementById('chkClientes').checked;
+    const incluirPrestamos = document.getElementById('chkPrestamos').checked;
+    const incluirEmpenos = document.getElementById('chkEmpenos').checked;
+    const incluirPagos = document.getElementById('chkPagos').checked;
+
+    let html = '<div class="recibo-titulo">App de Préstamos — Reporte</div>';
+    html += '<div class="recibo-sub">' + new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' }) + '</div>';
+
+    if (incluirResumen) {
+      html += '<div class="imp-seccion-h">Resumen</div>';
+      html += '<div class="recibo-linea"><span>Capital invertido (activo)</span><strong>' + document.getElementById('resCapitalInvertido').textContent + '</strong></div>';
+      html += '<div class="recibo-linea"><span>Capital recuperado</span><strong>' + document.getElementById('resCapitalRecuperado').textContent + '</strong></div>';
+      html += '<div class="recibo-linea"><span>Ganancias totales</span><strong>' + document.getElementById('resGanancias').textContent + '</strong></div>';
+    }
+
+    if (incluirClientes) {
+      html += '<div class="imp-seccion-h">Clientes (' + clientesCache.length + ')</div>';
+      html += '<table class="imp-tabla"><tr><th>Nombre</th><th>Teléfono</th><th>Cédula</th></tr>';
+      clientesCache.forEach(c => { html += '<tr><td>' + c.nombre + '</td><td>' + (c.telefono || '') + '</td><td>' + (c.cedula || '') + '</td></tr>'; });
+      html += '</table>';
+    }
+
+    if (incluirPrestamos) {
+      const activos = prestamosCache.filter(p => p.estado !== 'pagado');
+      html += '<div class="imp-seccion-h">Préstamos activos (' + activos.length + ')</div>';
+      html += '<table class="imp-tabla"><tr><th>Cliente</th><th>Saldo pendiente</th><th>Próximo pago</th><th>Plan</th></tr>';
+      activos.forEach(p => {
+        const plan = p.tipoPlan === 'cuotas' ? ('Cuota ' + p.cuotasPagadas + '/' + p.cantidadPagos) : 'Sin plazo fijo';
+        html += '<tr><td>' + p.clienteNombre + '</td><td>$' + Number(p.saldoCapitalPendiente).toLocaleString(undefined,{maximumFractionDigits:2}) + '</td><td>' + p.fechaProximoPago + '</td><td>' + plan + '</td></tr>';
+      });
+      html += '</table>';
+    }
+
+    if (incluirEmpenos) {
+      const activos = empenosCache.filter(e => e.estado === 'activo');
+      html += '<div class="imp-seccion-h">Empeños activos (' + activos.length + ')</div>';
+      html += '<table class="imp-tabla"><tr><th>Cliente</th><th>Artículo</th><th>Valor</th><th>Fecha límite</th></tr>';
+      activos.forEach(e => {
+        html += '<tr><td>' + e.clienteNombre + '</td><td>' + e.articulo + '</td><td>$' + Number(e.valor).toLocaleString(undefined,{maximumFractionDigits:2}) + '</td><td>' + e.fechaLimite + '</td></tr>';
+      });
+      html += '</table>';
+    }
+
+    if (incluirPagos) {
+      html += '<div class="imp-seccion-h">Historial de pagos (' + pagosCache.length + ')</div>';
+      html += '<table class="imp-tabla"><tr><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Fecha</th></tr>';
+      pagosCache.forEach(p => {
+        const tipoTexto = p.tipo === 'interes' ? 'Interés' : (p.tipo === 'cuota' ? 'Cuota' : 'Abono capital');
+        const fechaTexto = new Date(p.fechaPago).toLocaleDateString('es-DO');
+        html += '<tr><td>' + p.clienteNombre + '</td><td>' + tipoTexto + '</td><td>$' + Number(p.monto).toLocaleString(undefined,{maximumFractionDigits:2}) + '</td><td>' + fechaTexto + '</td></tr>';
+      });
+      html += '</table>';
+    }
+
+    document.getElementById('reciboImprimir').innerHTML = html;
+    cerrarModalImprimir();
+    setTimeout(() => window.print(), 200);
+  };
 </script>
 
 </body>
