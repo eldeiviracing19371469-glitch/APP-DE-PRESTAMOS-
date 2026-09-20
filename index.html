@@ -95,11 +95,23 @@
   .recibo-total { display: flex; justify-content: space-between; padding: 12px 0; font-size: 17px; font-weight: 700; border-top: 2px solid #333; margin-top: 6px; }
   .recibo-titulo { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
   .recibo-sub { text-align: center; font-size: 12px; color: #888; margin-bottom: 16px; }
+
   @media print {
-    body * { visibility: hidden; }
-    #reciboImprimir, #reciboImprimir * { visibility: visible; }
-    #reciboImprimir { display: block !important; position: absolute; top: 0; left: 0; width: 100%; padding: 20px; }
-    .no-imprimir { display: none !important; }
+    @page { size: 58mm auto; margin: 0; }
+    html, body { width: 58mm; }
+    body * { display: none !important; }
+    #reciboImprimir {
+      display: block !important;
+      width: 58mm;
+      max-width: 58mm;
+      padding: 2mm;
+      font-size: 10px;
+      line-height: 1.3;
+    }
+    #reciboImprimir .recibo-titulo { font-size: 12px; margin-bottom: 2px; }
+    #reciboImprimir .recibo-sub { font-size: 9px; margin-bottom: 8px; }
+    #reciboImprimir .recibo-linea { font-size: 10px; padding: 3px 0; }
+    #reciboImprimir .recibo-total { font-size: 12px; padding: 6px 0; }
   }
 </style>
 </head>
@@ -218,7 +230,7 @@
     <div class="modal-header"><h3>¿Qué quieres imprimir?</h3><button class="modal-close" onclick="cerrarModalOpcionesRecibo()">✕</button></div>
     <label class="radiolabel"><input type="radio" name="opcionRecibo" value="interes" checked> Solo interés</label>
     <label class="radiolabel"><input type="radio" name="opcionRecibo" value="capital"> Solo capital pendiente</label>
-    <label class="radiolabel"><input type="radio" name="opcionRecibo" value="ambos"> Capital + interés juntos</label>
+    <label class="radiolabel"><input type="radio" name="opcionRecibo" value="ambos"> Capital + interés (abono específico)</label>
     <button class="btn-primary" onclick="confirmarImprimirPrestamo()">Generar recibo</button>
   </div>
 </div>
@@ -618,14 +630,26 @@
     } else if (opcion === 'capital') {
       datos = { clienteNombre: p.clienteNombre, tipo: 'Capital pendiente', monto: p.saldoCapitalPendiente, proximoPago: p.fechaProximoPago };
     } else {
-      const montoCapitalMostrar = esCuotas ? Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.capitalPorCuota : p.saldoCapitalPendiente;
-      datos = {
-        clienteNombre: p.clienteNombre, tipo: 'Capital + interés',
-        monto: montoCapitalMostrar + montoInteres,
-        cuotas: esCuotas ? (p.cuotasPagadas + ' de ' + p.cantidadPagos) : null,
-        saldo: p.saldoCapitalPendiente,
-        proximoPago: p.fechaProximoPago
-      };
+      if (esCuotas) {
+        const montoCapitalMostrar = Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.capitalPorCuota;
+        datos = {
+          clienteNombre: p.clienteNombre, tipo: 'Capital + interés (cuota)',
+          monto: montoCapitalMostrar + montoInteres,
+          cuotas: p.cuotasPagadas + ' de ' + p.cantidadPagos,
+          saldo: p.saldoCapitalPendiente,
+          proximoPago: p.fechaProximoPago
+        };
+      } else {
+        const abono = parseFloat(prompt('Capital pendiente: $' + p.saldoCapitalPendiente + '\n¿Cuánto abona el cliente al capital?'));
+        if (!abono || abono <= 0) return;
+        const total = abono + montoInteres;
+        datos = {
+          clienteNombre: p.clienteNombre, tipo: 'Capital + interés',
+          monto: total,
+          saldo: Math.max(0, p.saldoCapitalPendiente - abono),
+          proximoPago: p.fechaProximoPago
+        };
+      }
     }
     cerrarModalOpcionesRecibo();
     mostrarRecibo(datos);
