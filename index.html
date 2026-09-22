@@ -79,7 +79,7 @@
   .pago-nombre { font-weight: 600; font-size: 14px; }
   .pago-detalle { font-size: 12px; color: #666; margin-top: 2px; }
   .pago-monto { font-weight: 700; font-size: 15px; }
-  .pago-monto.interes { color: #c96a00; }
+  .pago-monto.interes, .pago-monto.interesEmpeno { color: #c96a00; }
   .pago-monto.cuota, .pago-monto.capital { color: #1a7d3c; }
   .pago-acciones { margin-top: 6px; }
   .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
@@ -196,7 +196,7 @@
     <button class="btn-foto" onclick="document.getElementById('inputFotoEmpeno').click()">📷 Tomar o subir foto</button>
     <div class="fila-doble">
       <div><label>Valor entregado</label><input type="number" id="empenoValor" placeholder="1000"></div>
-      <div><label>Ganancia esperada</label><input type="number" id="empenoGanancia" placeholder="200"></div>
+      <div><label>Ganancia por período</label><input type="number" id="empenoGanancia" placeholder="200"></div>
     </div>
     <label>Fecha límite para recuperarlo</label>
     <input type="date" id="empenoFecha">
@@ -263,6 +263,7 @@
   let archivoFotoEmpenoSeleccionado = null;
   let fotoUrlEmpenoActual = null;
   let prestamoIdParaRecibo = null;
+  let datosReciboActual = null;
 
   const NOMBRES_FRECUENCIA = { diario: 'Diario', semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual' };
   const DIAS_FRECUENCIA = { diario: 1, semanal: 7, quincenal: 15, mensual: 30 };
@@ -760,9 +761,12 @@
         await uploadBytes(storageRef, archivoFotoEmpenoSeleccionado);
         fotoURL = await getDownloadURL(storageRef);
       }
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
+      const limite = new Date(fechaLimite + 'T00:00:00');
+      const diasPeriodo = Math.max(1, Math.round((limite - hoy) / (1000*60*60*24)));
       await addDoc(collection(db, 'empenos'), {
         clienteId, clienteNombre: cliente ? cliente.nombre : 'Cliente',
-        articulo, fotoURL, valor, ganancia, fechaLimite, notas,
+        articulo, fotoURL, valor, ganancia, fechaLimite, diasPeriodo, notas,
         estado: 'activo', fechaCreacion: Date.now()
       });
       cerrarModalEmpeno();
@@ -783,6 +787,30 @@
     if (!confirm('¿Marcar este artículo como no recuperado (se queda contigo)?')) return;
     try { await updateDoc(doc(db, 'empenos', id), { estado: 'perdido' }); }
     catch (error) { alert('Error: ' + error.message); }
+  };
+
+  window.pagarInteresEmpeno = async function (id) {
+    const e = empenosCache.find(x => x.id === id);
+    if (!e) return;
+    const diasPeriodo = e.diasPeriodo || 7;
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const limite = new Date(e.fechaLimite + 'T00:00:00');
+    const diffDias = Math.round((hoy - limite) / (1000*60*60*24));
+    const periodos = diffDias <= 0 ? 1 : 1 + Math.ceil(diffDias / diasPeriodo);
+    const monto = periodos * Number(e.ganancia || 0);
+    const aviso = periodos > 1 ? ' (incluye ' + periodos + ' períodos acumulados)' : '';
+    if (!confirm('¿Confirmar pago de $' + monto.toLocaleString(undefined,{maximumFractionDigits:2}) + aviso + '? El artículo sigue empeñado por otro período.')) return;
+    try {
+      const fechaAnterior = e.fechaLimite;
+      let nuevaFecha = new Date(e.fechaLimite + 'T00:00:00');
+      for (let i = 0; i < periodos; i++) nuevaFecha.setDate(nuevaFecha.getDate() + diasPeriodo);
+      const nuevaFechaStr = nuevaFecha.toISOString().split('T')[0];
+      await updateDoc(doc(db, 'empenos', id), { fechaLimite: nuevaFechaStr });
+      await addDoc(collection(db, 'pagos'), {
+        empenoId: id, clienteId: e.clienteId, clienteNombre: e.clienteNombre,
+        tipo: 'interesEmpeno', monto, periodos, fechaAnterior, fechaNueva: nuevaFechaStr, fechaPago: Date.now()
+      });
+    } catch (error) { alert('Error: ' + error.message); }
   };
 
   window.eliminarEmpeno = async function (id) {
@@ -820,13 +848,13 @@
       }
       const total = Number(e.valor) + Number(e.ganancia || 0);
       const botones = e.estado === 'activo'
-        ? '<button class="btn-ok" onclick="marcarRecuperado(\'' + e.id + '\')">Recuperado</button><button class="btn-interes" onclick="marcarPerdido(\'' + e.id + '\')">No recuperado</button>'
+        ? '<button class="btn-ok" onclick="marcarRecuperado(\'' + e.id + '\')">Recuperado</button><button class="btn-interes" onclick="pagarInteresEmpeno(\'' + e.id + '\')">Pagar interés</button><button class="btn-danger" onclick="marcarPerdido(\'' + e.id + '\')">No recuperado</button>'
         : '';
       return '<div class="empeno-item">' +
         '<img class="empeno-foto" src="' + (e.fotoURL || '') + '" onerror="this.style.background=\'#ddd\'">' +
         '<div class="empeno-info">' +
         '<div class="empeno-titulo">' + e.articulo + '</div>' +
-        '<div class="empeno-sub">' + e.clienteNombre + ' · Prestado: $' + Number(e.valor).toLocaleString(undefined,{maximumFractionDigits:2}) + ' · Total a recuperar: $' + total.toLocaleString(undefined,{maximumFractionDigits:2}) + '</div>' +
+        '<div class="empeno-sub">' + e.clienteNombre + ' · Prestado: $' + Number(e.valor).toLocaleString(undefined,{maximumFractionDigits:2}) + ' · Ganancia/período: $' + Number(e.ganancia).toLocaleString(undefined,{maximumFractionDigits:2}) + '</div>' +
         '<div class="empeno-sub">Fecha límite: ' + e.fechaLimite + (e.notas ? ' · ' + e.notas : '') + '</div>' +
         badge +
         '<div class="prestamo-acciones">' + botones +
@@ -855,7 +883,8 @@
     const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes').reduce((sum, p) => sum + Number(p.monto || 0), 0);
     const gananciasCapitalAbono = pagosCache.filter(p => p.tipo === 'capital').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.ganancia || 0), 0);
-    const ganancias = gananciasCuotas + gananciasInteres + gananciasCapitalAbono + gananciasEmpenos;
+    const gananciasInteresEmpenos = pagosCache.filter(p => p.tipo === 'interesEmpeno').reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    const ganancias = gananciasCuotas + gananciasInteres + gananciasCapitalAbono + gananciasEmpenos + gananciasInteresEmpenos;
     document.getElementById('resCapitalInvertido').textContent = '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
     document.getElementById('resCapitalRecuperado').textContent = '$' + capitalRecuperado.toLocaleString(undefined, {maximumFractionDigits: 2});
     document.getElementById('resGanancias').textContent = '$' + ganancias.toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -867,7 +896,7 @@
     contenedor.innerHTML = pagosCache.map(p => {
       const fecha = new Date(p.fechaPago);
       const fechaTexto = fecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
-      const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : (p.tipo === 'cuota' ? 'Cuota (capital+interés)' : 'Capital + interés');
+      const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : (p.tipo === 'cuota' ? 'Cuota (capital+interés)' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : 'Capital + interés'));
       return '<div class="pago-item"><div class="pago-top"><div class="pago-info"><div class="pago-nombre">' + p.clienteNombre + '</div><div class="pago-detalle">' + tipoTexto + ' · ' + fechaTexto + '</div></div>' +
         '<div class="pago-monto ' + p.tipo + '">$' + Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div></div>' +
         '<div class="pago-acciones"><button class="btn-print" onclick="imprimirReciboPago(\'' + p.id + '\')">🖨️ Recibo</button>' +
@@ -878,40 +907,45 @@
   window.imprimirReciboPago = function (id) {
     const p = pagosCache.find(x => x.id === id);
     if (!p) return;
-    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : 'Capital + interés');
+    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : 'Capital + interés'));
     mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: tipoTexto, monto: p.monto, cuotas: null, saldo: null, proximoPago: p.fechaNueva || '' });
   };
 
   window.eliminarPago = async function (id) {
     const pago = pagosCache.find(p => p.id === id);
     if (!pago) return;
-    if (!confirm('¿Eliminar este pago del historial? Se deshará su efecto en el préstamo.')) return;
+    if (!confirm('¿Eliminar este pago del historial? Se deshará su efecto correspondiente.')) return;
     try {
-      const prestamo = prestamosCache.find(p => p.id === pago.prestamoId);
-      if (prestamo) {
-        if (pago.tipo === 'interes') {
-          await updateDoc(doc(db, 'prestamos', pago.prestamoId), { fechaProximoPago: pago.fechaAnterior });
-        } else if (pago.tipo === 'cuota') {
-          const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
-          const nuevasCuotasPagadas = Math.max(0, Number(prestamo.cuotasPagadas || 0) - Number(pago.periodos || 1));
-          await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
-            saldoCapitalPendiente: nuevoSaldoCapital, cuotasPagadas: nuevasCuotasPagadas,
-            fechaProximoPago: pago.fechaAnterior, estado: 'activo'
-          });
-        } else if (pago.tipo === 'capital') {
-          const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
-          await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
-            saldoCapitalPendiente: nuevoSaldoCapital,
-            fechaProximoPago: pago.fechaAnterior || prestamo.fechaProximoPago,
-            estado: 'activo'
-          });
+      if (pago.tipo === 'interesEmpeno') {
+        const empeno = empenosCache.find(e => e.id === pago.empenoId);
+        if (empeno) {
+          await updateDoc(doc(db, 'empenos', pago.empenoId), { fechaLimite: pago.fechaAnterior });
+        }
+      } else {
+        const prestamo = prestamosCache.find(p => p.id === pago.prestamoId);
+        if (prestamo) {
+          if (pago.tipo === 'interes') {
+            await updateDoc(doc(db, 'prestamos', pago.prestamoId), { fechaProximoPago: pago.fechaAnterior });
+          } else if (pago.tipo === 'cuota') {
+            const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
+            const nuevasCuotasPagadas = Math.max(0, Number(prestamo.cuotasPagadas || 0) - Number(pago.periodos || 1));
+            await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
+              saldoCapitalPendiente: nuevoSaldoCapital, cuotasPagadas: nuevasCuotasPagadas,
+              fechaProximoPago: pago.fechaAnterior, estado: 'activo'
+            });
+          } else if (pago.tipo === 'capital') {
+            const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
+            await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
+              saldoCapitalPendiente: nuevoSaldoCapital,
+              fechaProximoPago: pago.fechaAnterior || prestamo.fechaProximoPago,
+              estado: 'activo'
+            });
+          }
         }
       }
       await deleteDoc(doc(db, 'pagos', id));
     } catch (error) { alert('Error al eliminar: ' + error.message); }
   };
-
-  let datosReciboActual = null;
 
   window.mostrarRecibo = function (datos) {
     datosReciboActual = datos;
@@ -941,6 +975,7 @@
   };
 
   window.cerrarModalRecibo = function () { document.getElementById('modalRecibo').classList.remove('active'); };
+
   window.imprimirLimpio = function () {
     if (!datosReciboActual) return;
     const html = document.getElementById('reciboContenido').innerHTML;
@@ -967,7 +1002,6 @@
       ventana.print();
     }, 300);
   };
-
 </script>
 
 </body>
