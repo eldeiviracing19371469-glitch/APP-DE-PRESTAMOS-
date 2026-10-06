@@ -951,6 +951,7 @@
     datosReciboActual = datos;
     const ahora = new Date();
     const fechaTexto = ahora.toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' }) + ' · ' + ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
+    datosReciboActual.fechaCorta = ahora.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + ahora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
     document.getElementById('reciboFechaTop').textContent = fechaTexto;
     document.getElementById('reciboCliente').textContent = datos.clienteNombre;
     document.getElementById('reciboTipo').textContent = datos.tipo;
@@ -976,8 +977,74 @@
 
   window.cerrarModalRecibo = function () { document.getElementById('modalRecibo').classList.remove('active'); };
 
+  // ===================== IMPRESIÓN TÉRMICA (RawBT) =====================
+  // Impresora 58mm = 32 caracteres por línea
+  const ANCHO_TICKET = 32;
+
+  function limpiarTexto(t) {
+    return String(t == null ? '' : t)
+      .replace(/[·•]/g, '-')
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/\u00A0|\u202F/g, ' ');
+  }
+
+  function centrar(t) {
+    t = limpiarTexto(t);
+    if (t.length >= ANCHO_TICKET) return t;
+    return ' '.repeat(Math.floor((ANCHO_TICKET - t.length) / 2)) + t;
+  }
+
+  function lineaDoble(izq, der) {
+    izq = limpiarTexto(izq);
+    der = limpiarTexto(der);
+    if (izq.length + der.length + 1 <= ANCHO_TICKET) {
+      return izq + ' '.repeat(ANCHO_TICKET - izq.length - der.length) + der;
+    }
+    return izq + '\n' + ' '.repeat(Math.max(0, ANCHO_TICKET - der.length)) + der;
+  }
+
+  function dinero(n) {
+    return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function construirTextoRecibo(d) {
+    const sep = '-'.repeat(ANCHO_TICKET);
+    const sep2 = '='.repeat(ANCHO_TICKET);
+    const l = [];
+    l.push(centrar('APP DE PRÉSTAMOS'));
+    l.push(centrar(d.fechaCorta || ''));
+    l.push(sep);
+    l.push(lineaDoble('Cliente:', d.clienteNombre));
+    l.push(lineaDoble('Tipo:', d.tipo));
+    if (d.cuotas) l.push(lineaDoble('Cuotas pagadas:', d.cuotas));
+    if (d.saldo != null) l.push(lineaDoble('Saldo pendiente:', dinero(d.saldo)));
+    if (d.proximoPago) l.push(lineaDoble('Próximo cobro:', d.proximoPago));
+    l.push(sep2);
+    l.push(lineaDoble('MONTO:', dinero(d.monto)));
+    l.push(sep2);
+    l.push('');
+    l.push(centrar('Gracias por su pago'));
+    l.push('');
+    l.push('');
+    l.push('');
+    return l.join('\n');
+  }
+
   window.imprimirLimpio = function () {
     if (!datosReciboActual) return;
+    // En Android se manda directo a la impresora Bluetooth por RawBT
+    if (/Android/i.test(navigator.userAgent)) {
+      const texto = construirTextoRecibo(datosReciboActual);
+      const url = 'intent:' + encodeURIComponent(texto) + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
+      window.location.href = url;
+      return;
+    }
+    // En otros equipos (computadora, iPhone) se usa la impresión normal
+    imprimirNavegador();
+  };
+
+  function imprimirNavegador() {
     const html = document.getElementById('reciboContenido').innerHTML;
     const ventana = window.open('', '_blank');
     if (!ventana) { alert('El navegador bloqueó la ventana. Permite ventanas emergentes para imprimir.'); return; }
@@ -1001,7 +1068,7 @@
       ventana.focus();
       ventana.print();
     }, 300);
-  };
+  }
 </script>
 
 </body>
