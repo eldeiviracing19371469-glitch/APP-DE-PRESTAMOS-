@@ -230,7 +230,7 @@
       <div class="recibo-linea" id="reciboLineaProximo"><span>Próximo cobro</span><strong id="reciboProximo"></strong></div>
       <div class="recibo-total"><span>Monto</span><strong id="reciboMonto"></strong></div>
     </div>
-    <button class="btn-primary" onclick="imprimirLimpio()">🖨️ Imprimir</button>
+    <button class="btn-primary" id="btnImprimirRecibo" onclick="imprimirLimpio()">🖨️ Imprimir</button>
     <button class="btn-primary" style="background:#8e8e93;" onclick="cerrarModalRecibo()">Cerrar</button>
   </div>
 </div>
@@ -1083,12 +1083,86 @@
       window.location.href = 'intent:base64,' + b64 + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
       return;
     }
-    // En iPhone se genera el recibo como imagen y se comparte a BR RawPrinter
+    // Si el navegador tiene Bluetooth (Bluefy en iPhone), imprime directo a la impresora
+    if (navigator.bluetooth) { imprimirBLE(); return; }
+    // En iPhone (Safari) se genera el recibo como imagen y se comparte a BR RawPrinter
     const esIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (esIOS) { imprimirIPhone(); return; }
     // En computadora se usa la impresión normal
     imprimirNavegador();
   };
+
+  // ===================== IMPRESIÓN POR BLUETOOTH (Bluefy en iPhone) =====================
+  const SERVICIOS_IMPRESORA = [
+    '000018f0-0000-1000-8000-00805f9b34fb',
+    '0000ffe0-0000-1000-8000-00805f9b34fb',
+    '0000ff00-0000-1000-8000-00805f9b34fb',
+    '0000fee7-0000-1000-8000-00805f9b34fb',
+    '0000af30-0000-1000-8000-00805f9b34fb',
+    '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+    'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+  ];
+  let bleDispositivo = null;
+  let bleCaracteristica = null;
+  let bleTamanoBloque = 100;
+
+  async function conectarImpresoraBLE() {
+    if (!bleDispositivo) {
+      bleDispositivo = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: SERVICIOS_IMPRESORA });
+      bleDispositivo.addEventListener('gattserverdisconnected', () => { bleCaracteristica = null; });
+    }
+    if (bleCaracteristica && bleDispositivo.gatt.connected) return bleCaracteristica;
+    const servidor = await bleDispositivo.gatt.connect();
+    const servicios = await servidor.getPrimaryServices();
+    for (const servicio of servicios) {
+      const caracteristicas = await servicio.getCharacteristics();
+      for (const c of caracteristicas) {
+        if (c.properties.write || c.properties.writeWithoutResponse) { bleCaracteristica = c; return c; }
+      }
+    }
+    throw new Error('La impresora no tiene un canal de impresión compatible.');
+  }
+
+  const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
+  async function enviarBytesBLE(c, bytes) {
+    const conRespuesta = c.properties.write;
+    for (let i = 0; i < bytes.length; i += bleTamanoBloque) {
+      const bloque = new Uint8Array(bytes.slice(i, i + bleTamanoBloque));
+      if (conRespuesta) {
+        await c.writeValue(bloque);
+      } else {
+        if (c.writeValueWithoutResponse) await c.writeValueWithoutResponse(bloque);
+        else await c.writeValue(bloque);
+        await esperar(25);
+      }
+    }
+  }
+
+  async function imprimirBLE() {
+    if (!datosReciboActual) return;
+    const boton = document.getElementById('btnImprimirRecibo');
+    const textoOriginal = boton.textContent;
+    boton.disabled = true;
+    boton.textContent = 'Imprimiendo...';
+    try {
+      const c = await conectarImpresoraBLE();
+      const bytes = construirBytesRecibo(datosReciboActual);
+      try {
+        await enviarBytesBLE(c, bytes);
+      } catch (e) {
+        // si falla, se reintenta con bloques más pequeños
+        bleTamanoBloque = 20;
+        await enviarBytesBLE(c, bytes);
+      }
+    } catch (error) {
+      if (error && error.name === 'NotFoundError') { /* el usuario canceló la selección */ }
+      else { alert('No se pudo imprimir: ' + (error && error.message ? error.message : error)); bleDispositivo = null; bleCaracteristica = null; }
+    } finally {
+      boton.disabled = false;
+      boton.textContent = textoOriginal;
+    }
+  }
 
   // ===================== IMPRESIÓN EN IPHONE (imagen + Compartir) =====================
   const logoImagen = new Image();
