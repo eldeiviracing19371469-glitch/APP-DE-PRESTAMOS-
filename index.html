@@ -180,6 +180,9 @@
     <div class="total-preview" id="totalPreview">Completa los datos para ver el plan</div>
     <label>Fecha del primer pago</label>
     <input type="date" id="prestamoFecha">
+    <label id="labelInteresAtrasado">Interés atrasado que ya debe (opcional)</label>
+    <input type="number" id="prestamoInteresAtrasado" placeholder="Ej. 1000 (de la libreta)">
+    <div style="font-size:12px;color:#888;margin:-6px 0 10px;" id="ayudaInteresAtrasado">No incluyas el interés del período actual, la app lo suma sola.</div>
     <label>Notas (opcional)</label>
     <input type="text" id="prestamoNotas" placeholder="Notas adicionales...">
     <button class="btn-primary" id="btnGuardarPrestamo" onclick="guardarPrestamo()">Guardar préstamo</button>
@@ -238,6 +241,7 @@
       <div class="recibo-linea"><span>Fecha</span><strong id="reciboFecha"></strong></div>
       <div class="recibo-linea" id="reciboLineaCuotas"><span>Cuotas pagadas</span><strong id="reciboCuotas"></strong></div>
       <div class="recibo-linea" id="reciboLineaSaldo"><span>Saldo pendiente</span><strong id="reciboSaldo"></strong></div>
+      <div class="recibo-linea" id="reciboLineaIntPend"><span>Interés pendiente</span><strong id="reciboIntPend"></strong></div>
       <div class="recibo-linea" id="reciboLineaProximo"><span>Próximo cobro</span><strong id="reciboProximo"></strong></div>
       <div class="recibo-total"><span>Monto</span><strong id="reciboMonto"></strong></div>
     </div>
@@ -409,6 +413,9 @@
     document.getElementById('prestamoFrecuencia').value = 'semanal';
     document.getElementById('prestamoFecha').value = '';
     document.getElementById('prestamoNotas').value = '';
+    document.getElementById('prestamoInteresAtrasado').value = '';
+    document.getElementById('labelInteresAtrasado').textContent = 'Interés atrasado que ya debe (opcional)';
+    document.getElementById('ayudaInteresAtrasado').textContent = 'No incluyas el interés del período actual, la app lo suma sola.';
     actualizarTotalPreview();
     document.getElementById('modalPrestamo').classList.add('active');
   };
@@ -426,6 +433,9 @@
     document.getElementById('prestamoFrecuencia').value = p.frecuencia || 'semanal';
     document.getElementById('prestamoFecha').value = p.fechaProximoPago;
     document.getElementById('prestamoNotas').value = p.notas || '';
+    document.getElementById('prestamoInteresAtrasado').value = interesPendienteDe(p);
+    document.getElementById('labelInteresAtrasado').textContent = 'Interés pendiente total';
+    document.getElementById('ayudaInteresAtrasado').textContent = 'Cámbialo solo si quieres corregir lo que debe de interés.';
     actualizarTotalPreview();
     document.getElementById('modalPrestamo').classList.add('active');
   };
@@ -475,6 +485,42 @@
     return 1 + Math.ceil(diffDias / diasPeriodo);
   }
 
+  function interesUnitarioDe(p) {
+    return p.tipoPlan === 'cuotas' ? Number(p.interesPorCuota || 0) : (Number(p.saldoCapitalPendiente || 0) * Number(p.interesPorcentaje || 0) / 100);
+  }
+
+  // Interés pendiente = períodos vencidos × interés del período + ajuste (atrasado de libreta − abonos)
+  function interesPendienteDe(p) {
+    const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
+    const total = periodos * interesUnitarioDe(p) + Number(p.interesExtra || 0);
+    return Math.max(0, Math.round(total * 100) / 100);
+  }
+
+  window.abonarInteres = async function (id) {
+    const p = prestamosCache.find(x => x.id === id);
+    if (!p) return;
+    const pendiente = interesPendienteDe(p);
+    if (pendiente <= 0) { alert('Este cliente no tiene interés pendiente.'); return; }
+    const escrito = prompt(p.clienteNombre + '\nInterés pendiente: ' + dinero(pendiente) + '\n\n¿Cuánto abona al interés?');
+    if (escrito === null) return;
+    const abono = parseFloat(String(escrito).replace(/[$,\s]/g, ''));
+    if (!abono || abono <= 0) { alert('Cantidad no válida.'); return; }
+    if (abono > pendiente) { alert('El abono no puede ser mayor que el interés pendiente (' + dinero(pendiente) + ').'); return; }
+    if (abono >= pendiente) { await pagarInteres(id, true); return; }
+    const quedan = Math.round((pendiente - abono) * 100) / 100;
+    if (!confirm('Abono al interés: ' + dinero(abono) + '\nQueda debiendo de interés: ' + dinero(quedan) + '\n\n¿Confirmar?')) return;
+    try {
+      const extraAnterior = Number(p.interesExtra || 0);
+      await updateDoc(doc(db, 'prestamos', id), { interesExtra: extraAnterior - abono });
+      const ref2 = await addDoc(collection(db, 'pagos'), {
+        prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
+        tipo: 'abonoInteres', monto: abono, montoInteres: abono, interesPendiente: quedan,
+        extraAnterior, fechaAnterior: p.fechaProximoPago, fechaNueva: p.fechaProximoPago, fechaPago: Date.now()
+      });
+      mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Abono al interés', monto: abono, interesPendiente: quedan, proximoPago: p.fechaProximoPago });
+    } catch (error) { alert('Error: ' + error.message); }
+  };
+
   window.guardarPrestamo = async function () {
     const id = document.getElementById('prestamoId').value;
     const clienteId = document.getElementById('prestamoCliente').value;
@@ -485,13 +531,24 @@
     const frecuencia = document.getElementById('prestamoFrecuencia').value;
     const fechaProximoPago = document.getElementById('prestamoFecha').value;
     const notas = document.getElementById('prestamoNotas').value.trim();
+    const interesAtrasadoRaw = document.getElementById('prestamoInteresAtrasado').value;
+    const interesAtrasado = parseFloat(interesAtrasadoRaw) || 0;
     if (!clienteId || !capital || !fechaProximoPago) { alert('Completa cliente, capital y fecha.'); return; }
     const cliente = clientesCache.find(c => c.id === clienteId);
     const boton = document.getElementById('btnGuardarPrestamo');
     boton.disabled = true; boton.textContent = 'Guardando...';
     try {
       if (id) {
-        await updateDoc(doc(db, 'prestamos', id), { interesPorcentaje, frecuencia, fechaProximoPago, notas });
+        const datosEdit = { interesPorcentaje, frecuencia, fechaProximoPago, notas };
+        if (interesAtrasadoRaw !== '') {
+          // el usuario escribió el interés pendiente total: se ajusta para que la app muestre exactamente eso
+          const pAct = prestamosCache.find(x => x.id === id);
+          const temp = Object.assign({}, pAct, datosEdit);
+          if (temp.tipoPlan === 'cuotas') temp.interesPorCuota = (temp.capital * interesPorcentaje / 100) / temp.cantidadPagos;
+          const periodos = calcularPeriodosPendientes(fechaProximoPago, frecuencia);
+          datosEdit.interesExtra = interesAtrasado - periodos * interesUnitarioDe(temp);
+        }
+        await updateDoc(doc(db, 'prestamos', id), datosEdit);
       } else if (cantidadPagos > 0) {
         const interesTotal = capital * interesPorcentaje / 100;
         const totalDeuda = capital + interesTotal;
@@ -502,7 +559,7 @@
           capitalPorCuota: capital / cantidadPagos,
           interesPorCuota: interesTotal / cantidadPagos,
           cuotaFija: totalDeuda / cantidadPagos,
-          saldoCapitalPendiente: capital, frecuencia, fechaProximoPago, notas,
+          saldoCapitalPendiente: capital, frecuencia, fechaProximoPago, notas, interesExtra: interesAtrasado,
           estado: 'activo', fechaCreacion: Date.now()
         });
       } else {
@@ -510,7 +567,7 @@
           clienteId, clienteNombre: cliente ? cliente.nombre : 'Cliente',
           tipoPlan: 'abierto',
           capital, interesPorcentaje,
-          saldoCapitalPendiente: capital, frecuencia, fechaProximoPago, notas,
+          saldoCapitalPendiente: capital, frecuencia, fechaProximoPago, notas, interesExtra: interesAtrasado,
           estado: 'activo', fechaCreacion: Date.now()
         });
       }
@@ -519,22 +576,23 @@
     finally { boton.disabled = false; boton.textContent = 'Guardar préstamo'; }
   };
 
-  window.pagarInteres = async function (id) {
+  window.pagarInteres = async function (id, yaConfirmado) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
     const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-    const interesUnitario = p.tipoPlan === 'cuotas' ? p.interesPorCuota : (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
-    const montoInteres = periodos * interesUnitario;
+    const montoInteres = interesPendienteDe(p);
     const avisoAtraso = periodos > 1 ? ' (incluye ' + periodos + ' períodos acumulados)' : '';
-    if (!confirm('¿Confirmar pago de solo interés de $' + montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2}) + avisoAtraso + '? El capital no se toca.')) return;
+    if (!yaConfirmado && !confirm('¿Confirmar pago de todo el interés pendiente: $' + montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2}) + avisoAtraso + '? El capital no se toca.')) return;
     try {
       const fechaAnterior = p.fechaProximoPago;
       const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
-      await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha });
+      const extraAnterior = Number(p.interesExtra || 0);
+      await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha, interesExtra: 0 });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
-        tipo: 'interes', monto: montoInteres, periodos, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
+        tipo: 'interes', monto: montoInteres, periodos, extraAnterior, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
+      if (yaConfirmado) mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Pago de interés', monto: montoInteres, interesPendiente: 0, proximoPago: nuevaFecha });
     } catch (error) { alert('Error: ' + error.message); }
   };
 
@@ -544,7 +602,7 @@
     const periodos = Math.min(calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia), p.cantidadPagos - p.cuotasPagadas);
     if (periodos <= 0) return;
     const montoCapital = p.capitalPorCuota * periodos;
-    const montoInteres = p.interesPorCuota * periodos;
+    const montoInteres = Math.max(0, p.interesPorCuota * periodos + Number(p.interesExtra || 0));
     const montoTotal = montoCapital + montoInteres;
     const avisoAtraso = periodos > 1 ? ' (' + periodos + ' cuotas)' : '';
     if (!confirm('¿Confirmar pago de cuota' + avisoAtraso + ' de $' + montoTotal.toLocaleString(undefined, {maximumFractionDigits: 2}) + '?')) return;
@@ -556,11 +614,11 @@
       const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
       await updateDoc(doc(db, 'prestamos', id), {
         cuotasPagadas: nuevasCuotasPagadas, saldoCapitalPendiente: nuevoSaldoCapital,
-        fechaProximoPago: nuevaFecha, estado: pagoCompleto ? 'pagado' : 'activo'
+        fechaProximoPago: nuevaFecha, estado: pagoCompleto ? 'pagado' : 'activo', interesExtra: 0
       });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
-        tipo: 'cuota', monto: montoTotal, montoCapital, montoInteres, periodos,
+        tipo: 'cuota', monto: montoTotal, montoCapital, montoInteres, periodos, extraAnterior: Number(p.interesExtra || 0),
         fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
     } catch (error) { alert('Error: ' + error.message); }
@@ -570,10 +628,10 @@
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
     const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-    const interesDebido = periodos * (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
+    const interesDebido = interesPendienteDe(p);
     const abono = parseFloat(prompt(
       'Capital pendiente: $' + p.saldoCapitalPendiente +
-      '\nInterés de este período: $' + interesDebido.toLocaleString(undefined,{maximumFractionDigits:2}) +
+      '\nInterés pendiente: $' + interesDebido.toLocaleString(undefined,{maximumFractionDigits:2}) +
       '\n¿Cuánto capital quiere abonar (además del interés)?'
     ));
     if (!abono || abono <= 0) return;
@@ -586,11 +644,11 @@
       await updateDoc(doc(db, 'prestamos', id), {
         saldoCapitalPendiente: nuevoSaldo,
         fechaProximoPago: nuevaFecha,
-        estado: nuevoSaldo === 0 ? 'pagado' : 'activo'
+        estado: nuevoSaldo === 0 ? 'pagado' : 'activo', interesExtra: 0
       });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
-        tipo: 'capital', monto: totalACobrar, montoCapital: abono, montoInteres: interesDebido,
+        tipo: 'capital', monto: totalACobrar, montoCapital: abono, montoInteres: interesDebido, extraAnterior: Number(p.interesExtra || 0),
         periodos, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
     } catch (error) { alert('Error: ' + error.message); }
@@ -599,11 +657,10 @@
   function calcularSaldoTotal(p) {
     if (p.tipoPlan === 'cuotas') {
       // lo que falta del plan: cuotas restantes (capital + interés)
-      return Math.max(0, (p.cantidadPagos - p.cuotasPagadas)) * p.cuotaFija;
+      return Math.max(0, Math.max(0, (p.cantidadPagos - p.cuotasPagadas)) * p.cuotaFija + Number(p.interesExtra || 0));
     }
-    // sin plazo fijo: capital pendiente + interés acumulado
-    const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-    return Number(p.saldoCapitalPendiente) + periodos * (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
+    // sin plazo fijo: capital pendiente + interés pendiente
+    return Number(p.saldoCapitalPendiente) + interesPendienteDe(p);
   }
 
   window.saldarPrestamo = async function (id) {
@@ -625,12 +682,12 @@
       await updateDoc(doc(db, 'prestamos', id), {
         estado: 'pagado', saldoCapitalPendiente: 0,
         cuotasPagadas: p.tipoPlan === 'cuotas' ? p.cantidadPagos : (p.cuotasPagadas || 0),
-        fechaSaldado: Date.now(), montoSaldado: monto
+        fechaSaldado: Date.now(), montoSaldado: monto, interesExtra: 0
       });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
         tipo: 'saldo', monto, montoCapital: capital, montoInteres: monto - capital,
-        saldoAnterior: capital, cuotasPagadasAnterior: p.cuotasPagadas || 0,
+        saldoAnterior: capital, cuotasPagadasAnterior: p.cuotasPagadas || 0, extraAnterior: Number(p.interesExtra || 0),
         fechaAnterior: p.fechaProximoPago, fechaNueva: '', fechaPago: Date.now()
       });
       mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Préstamo saldado', monto, saldo: 0, proximoPago: '' });
@@ -680,6 +737,7 @@
     if (tipo === 'cuota') return 'Cuota (capital+interés)';
     if (tipo === 'interesEmpeno') return 'Interés de empeño';
     if (tipo === 'saldo') return 'Préstamo saldado';
+    if (tipo === 'abonoInteres') return 'Abono al interés';
     return 'Capital + interés';
   }
 
@@ -701,8 +759,7 @@
     const opcion = document.querySelector('input[name="opcionRecibo"]:checked').value;
     const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
     const esCuotas = p.tipoPlan === 'cuotas';
-    const interesUnitario = esCuotas ? p.interesPorCuota : (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
-    const montoInteres = periodos * interesUnitario;
+    const montoInteres = interesPendienteDe(p);
 
     let datos;
     if (opcion === 'interes') {
@@ -779,22 +836,22 @@
         if (estado === 'atrasado') badge = '<span class="badge badge-rojo">Atrasado</span>';
         else if (estado === 'hoy') badge = '<span class="badge badge-naranja">Vence hoy</span>';
         else badge = '<span class="badge badge-verde">Al día</span>';
+        if (Number(p.interesExtra || 0) < 0) badge += ' <span class="badge badge-naranja">Abonó ' + dinero(-p.interesExtra) + ' al interés</span>';
       }
       const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
       const frecLabel = NOMBRES_FRECUENCIA[p.frecuencia] || p.frecuencia;
       const esCuotas = p.tipoPlan === 'cuotas';
-      const interesUnitario = esCuotas ? p.interesPorCuota : (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
-      const montoInteresSolo = periodos * interesUnitario;
+      const montoInteresSolo = interesPendienteDe(p);
       const detalle = esCuotas
         ? 'Capital pendiente · Cuota ' + p.cuotasPagadas + ' de ' + p.cantidadPagos + ' · $' + p.cuotaFija.toLocaleString(undefined,{maximumFractionDigits:2}) + ' ' + frecLabel.toLowerCase()
         : 'Capital pendiente · Sin plazo fijo · ' + p.interesPorcentaje + '% ' + frecLabel.toLowerCase();
       const lineaAccion = esCuotas
-        ? 'Cuota a pagar: $' + (Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.cuotaFija).toLocaleString(undefined, {maximumFractionDigits: 2}) + ' · Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2})
-        : 'Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2});
+        ? 'Cuota a pagar: $' + (Math.min(periodos, p.cantidadPagos - p.cuotasPagadas) * p.cuotaFija).toLocaleString(undefined, {maximumFractionDigits: 2}) + ' · Interés pendiente: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2})
+        : 'Interés pendiente: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2});
       const botonesPago = p.estado !== 'pagado'
         ? (esCuotas
-            ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-saldar" onclick="saldarPrestamo(\'' + p.id + '\')">💰 Saldar</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>'
-            : '<button class="btn-ok" onclick="abonarCapital(\'' + p.id + '\')">Abonar capital</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-saldar" onclick="saldarPrestamo(\'' + p.id + '\')">💰 Saldar</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>')
+            ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-interes" onclick="abonarInteres(\'' + p.id + '\')">Abonar interés</button><button class="btn-saldar" onclick="saldarPrestamo(\'' + p.id + '\')">💰 Saldar</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>'
+            : '<button class="btn-ok" onclick="abonarCapital(\'' + p.id + '\')">Abonar capital</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-interes" onclick="abonarInteres(\'' + p.id + '\')">Abonar interés</button><button class="btn-saldar" onclick="saldarPrestamo(\'' + p.id + '\')">💰 Saldar</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>')
         : '';
       return '<div class="prestamo-item">' +
         '<div class="prestamo-top"><div class="prestamo-nombre">' + p.clienteNombre + '</div><div class="prestamo-monto">$' + Number(p.saldoCapitalPendiente).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div></div>' +
@@ -979,7 +1036,7 @@
     const capitalRecuperadoEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.valor || 0), 0);
     const capitalRecuperado = capitalRecuperadoPrestamos + capitalRecuperadoEmpenos;
     const gananciasCuotas = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
-    const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes').reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes' || p.tipo === 'abonoInteres').reduce((sum, p) => sum + Number(p.monto || 0), 0);
     const gananciasCapitalAbono = pagosCache.filter(p => p.tipo === 'capital' || p.tipo === 'saldo').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.ganancia || 0), 0);
     const gananciasInteresEmpenos = pagosCache.filter(p => p.tipo === 'interesEmpeno').reduce((sum, p) => sum + Number(p.monto || 0), 0);
@@ -1006,8 +1063,8 @@
   window.imprimirReciboPago = function (id) {
     const p = pagosCache.find(x => x.id === id);
     if (!p) return;
-    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : (p.tipo === 'saldo' ? 'Préstamo saldado' : 'Capital + interés')));
-    mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: tipoTexto, monto: p.monto, cuotas: null, saldo: null, proximoPago: p.fechaNueva || '' });
+    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : (p.tipo === 'saldo' ? 'Préstamo saldado' : (p.tipo === 'abonoInteres' ? 'Abono al interés' : 'Capital + interés'))));
+    mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: tipoTexto, monto: p.monto, cuotas: null, saldo: null, interesPendiente: p.tipo === 'abonoInteres' ? p.interesPendiente : null, proximoPago: p.fechaNueva || '' });
   };
 
   window.eliminarPago = async function (id) {
@@ -1023,28 +1080,30 @@
       } else {
         const prestamo = prestamosCache.find(p => p.id === pago.prestamoId);
         if (prestamo) {
-          if (pago.tipo === 'interes') {
-            await updateDoc(doc(db, 'prestamos', pago.prestamoId), { fechaProximoPago: pago.fechaAnterior });
+          if (pago.tipo === 'abonoInteres') {
+            await updateDoc(doc(db, 'prestamos', pago.prestamoId), { interesExtra: Number(prestamo.interesExtra || 0) + Number(pago.monto || 0) });
+          } else if (pago.tipo === 'interes') {
+            await updateDoc(doc(db, 'prestamos', pago.prestamoId), { fechaProximoPago: pago.fechaAnterior, interesExtra: Number(pago.extraAnterior || 0) });
           } else if (pago.tipo === 'cuota') {
             const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
             const nuevasCuotasPagadas = Math.max(0, Number(prestamo.cuotasPagadas || 0) - Number(pago.periodos || 1));
             await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
               saldoCapitalPendiente: nuevoSaldoCapital, cuotasPagadas: nuevasCuotasPagadas,
-              fechaProximoPago: pago.fechaAnterior, estado: 'activo'
+              fechaProximoPago: pago.fechaAnterior, estado: 'activo', interesExtra: Number(pago.extraAnterior || 0)
             });
           } else if (pago.tipo === 'saldo') {
             await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
               saldoCapitalPendiente: Number(pago.saldoAnterior || 0),
               cuotasPagadas: Number(pago.cuotasPagadasAnterior || 0),
               fechaProximoPago: pago.fechaAnterior || prestamo.fechaProximoPago,
-              estado: 'activo', montoSaldado: null, fechaSaldado: null
+              estado: 'activo', montoSaldado: null, fechaSaldado: null, interesExtra: Number(pago.extraAnterior || 0)
             });
           } else if (pago.tipo === 'capital') {
             const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
             await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
               saldoCapitalPendiente: nuevoSaldoCapital,
               fechaProximoPago: pago.fechaAnterior || prestamo.fechaProximoPago,
-              estado: 'activo'
+              estado: 'activo', interesExtra: Number(pago.extraAnterior || 0)
             });
           }
         }
@@ -1078,6 +1137,9 @@
       lineaCuotas.style.display = 'none'; lineaSaldo.style.display = 'none';
     }
     lineaProximo.style.display = datos.proximoPago ? 'flex' : 'none';
+    const lineaIP = document.getElementById('reciboLineaIntPend');
+    if (datos.interesPendiente != null) { lineaIP.style.display = 'flex'; document.getElementById('reciboIntPend').textContent = dinero(datos.interesPendiente); }
+    else lineaIP.style.display = 'none';
     document.getElementById('reciboProximo').textContent = datos.proximoPago || '';
     document.getElementById('modalRecibo').classList.add('active');
   };
@@ -1169,6 +1231,7 @@
     txt(lineaDoble('Tipo:', d.tipo));
     if (d.cuotas) txt(lineaDoble('Cuotas pagadas:', d.cuotas));
     if (d.saldo != null) txt(lineaDoble('Saldo pendiente:', dinero(d.saldo)));
+    if (d.interesPendiente != null) txt(lineaDoble('Interés pendiente:', dinero(d.interesPendiente)));
     if (d.proximoPago) txt(lineaDoble('Próximo cobro:', d.proximoPago));
     txt(sep2);
     b.push(ESC, 0x45, 1);         // negrita
@@ -1289,6 +1352,7 @@
     filas.push({ izq: 'Tipo:', der: d.tipo });
     if (d.cuotas) filas.push({ izq: 'Cuotas pagadas:', der: d.cuotas });
     if (d.saldo != null) filas.push({ izq: 'Saldo pendiente:', der: dinero(d.saldo) });
+    if (d.interesPendiente != null) filas.push({ izq: 'Interés pendiente:', der: dinero(d.interesPendiente) });
     if (d.proximoPago) filas.push({ izq: 'Próximo cobro:', der: d.proximoPago });
     filas.push({ sep: '=' });
     filas.push({ izq: 'MONTO:', der: dinero(d.monto), negrita: true });
