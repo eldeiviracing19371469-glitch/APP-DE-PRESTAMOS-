@@ -80,7 +80,11 @@
   .pago-detalle { font-size: 12px; color: #666; margin-top: 2px; }
   .pago-monto { font-weight: 700; font-size: 15px; }
   .pago-monto.interes, .pago-monto.interesEmpeno { color: #c96a00; }
-  .pago-monto.cuota, .pago-monto.capital { color: #1a7d3c; }
+  .pago-monto.cuota, .pago-monto.capital, .pago-monto.saldo { color: #1a7d3c; }
+  .btn-saldar { color: #fff; background: #1a7d3c; border: none; border-radius: 6px; padding: 4px 10px; font-size: 14px; margin-right: 12px; }
+  .hist-titulo { font-size: 14px; font-weight: 700; margin: 14px 0 6px; color: #444; }
+  .hist-prestamo { background: #f7f7f9; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; }
+  .hist-prestamo strong { font-size: 14px; }
   .pago-acciones { margin-top: 6px; }
   .seccion-titulo { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #444; }
   .empeno-item { display: flex; padding: 12px 0; border-bottom: 1px solid #eee; }
@@ -203,6 +207,13 @@
     <label>Notas (opcional)</label>
     <input type="text" id="empenoNotas" placeholder="Notas adicionales...">
     <button class="btn-primary" id="btnGuardarEmpeno" onclick="guardarEmpeno()">Guardar empeño</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalHistorialCliente">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="historialTitulo">Historial</h3><button class="modal-close" onclick="cerrarHistorialCliente()">✕</button></div>
+    <div id="historialContenido"></div>
   </div>
 </div>
 
@@ -372,6 +383,7 @@
           <div class="cliente-nombre">${c.nombre}</div>
           <div class="cliente-tel">${c.telefono || 'Sin teléfono'}</div>
         </div>
+        <button class="btn-print" onclick="verHistorialCliente('${c.id}')">Historial</button>
         <button class="btn-edit" onclick="editarCliente('${c.id}')">Editar</button>
         <button class="btn-danger" onclick="eliminarCliente('${c.id}')">Eliminar</button>
       </div>
@@ -584,6 +596,93 @@
     } catch (error) { alert('Error: ' + error.message); }
   };
 
+  function calcularSaldoTotal(p) {
+    if (p.tipoPlan === 'cuotas') {
+      // lo que falta del plan: cuotas restantes (capital + interés)
+      return Math.max(0, (p.cantidadPagos - p.cuotasPagadas)) * p.cuotaFija;
+    }
+    // sin plazo fijo: capital pendiente + interés acumulado
+    const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
+    return Number(p.saldoCapitalPendiente) + periodos * (p.saldoCapitalPendiente * p.interesPorcentaje / 100);
+  }
+
+  window.saldarPrestamo = async function (id) {
+    const p = prestamosCache.find(x => x.id === id);
+    if (!p) return;
+    const calculado = Math.round(calcularSaldoTotal(p) * 100) / 100;
+    let monto = calculado;
+    const ok = confirm('Saldo para saldar el préstamo de ' + p.clienteNombre + ':\n\n' + dinero(calculado) +
+      '\n\n(Capital pendiente: ' + dinero(p.saldoCapitalPendiente) + ')\n\n¿Es correcto este saldo?\nAceptar = Sí   /   Cancelar = escribir otra cantidad');
+    if (!ok) {
+      const escrito = prompt('Escribe la cantidad total que paga el cliente para saldar:', calculado);
+      if (escrito === null) return;
+      monto = parseFloat(String(escrito).replace(/[$,\s]/g, ''));
+      if (!monto || monto <= 0) { alert('Cantidad no válida.'); return; }
+    }
+    if (!confirm('¿Confirmar que ' + p.clienteNombre + ' saldó el préstamo pagando ' + dinero(monto) + '?\nEl préstamo pasará al historial del cliente.')) return;
+    try {
+      const capital = Number(p.saldoCapitalPendiente || 0);
+      await updateDoc(doc(db, 'prestamos', id), {
+        estado: 'pagado', saldoCapitalPendiente: 0,
+        cuotasPagadas: p.tipoPlan === 'cuotas' ? p.cantidadPagos : (p.cuotasPagadas || 0),
+        fechaSaldado: Date.now(), montoSaldado: monto
+      });
+      await addDoc(collection(db, 'pagos'), {
+        prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
+        tipo: 'saldo', monto, montoCapital: capital, montoInteres: monto - capital,
+        saldoAnterior: capital, cuotasPagadasAnterior: p.cuotasPagadas || 0,
+        fechaAnterior: p.fechaProximoPago, fechaNueva: '', fechaPago: Date.now()
+      });
+      mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Préstamo saldado', monto, saldo: 0, proximoPago: '' });
+    } catch (error) { alert('Error: ' + error.message); }
+  };
+
+  window.verHistorialCliente = function (clienteId) {
+    const c = clientesCache.find(x => x.id === clienteId);
+    if (!c) return;
+    document.getElementById('historialTitulo').textContent = 'Historial de ' + c.nombre;
+    const prestamos = prestamosCache.filter(p => p.clienteId === clienteId);
+    const pagos = pagosCache.filter(p => p.clienteId === clienteId);
+    const empenos = empenosCache.filter(e => e.clienteId === clienteId);
+    const f = (ms) => new Date(ms).toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
+    let html = '';
+    html += '<div class="hist-titulo">Préstamos (' + prestamos.length + ')</div>';
+    html += prestamos.length === 0 ? '<div class="empty-msg">Sin préstamos</div>' : prestamos.map(p => {
+      const estado = p.estado === 'pagado'
+        ? '<span class="badge badge-gris">Saldado' + (p.fechaSaldado ? ' el ' + f(p.fechaSaldado) : '') + '</span>'
+        : '<span class="badge badge-verde">Activo</span>';
+      return '<div class="hist-prestamo"><strong>Capital prestado: ' + dinero(p.capital) + '</strong><br>' +
+        p.interesPorcentaje + '% ' + (NOMBRES_FRECUENCIA[p.frecuencia] || '').toLowerCase() +
+        (p.tipoPlan === 'cuotas' ? ' · ' + p.cantidadPagos + ' cuotas' : ' · Sin plazo fijo') +
+        (p.fechaCreacion ? '<br>Fecha del préstamo: ' + f(p.fechaCreacion) : '') +
+        (p.estado === 'pagado' && p.montoSaldado ? '<br>Saldado con: ' + dinero(p.montoSaldado) : '<br>Capital pendiente: ' + dinero(p.saldoCapitalPendiente)) +
+        '<br>' + estado + '</div>';
+    }).join('');
+    if (empenos.length > 0) {
+      html += '<div class="hist-titulo">Empeños (' + empenos.length + ')</div>';
+      html += empenos.map(e => '<div class="hist-prestamo"><strong>' + e.articulo + '</strong><br>Prestado: ' + dinero(e.valor) + ' · Estado: ' + e.estado + '</div>').join('');
+    }
+    const totalPagado = pagos.reduce((s, x) => s + Number(x.monto || 0), 0);
+    html += '<div class="hist-titulo">Pagos (' + pagos.length + ') · Total: ' + dinero(totalPagado) + '</div>';
+    html += pagos.length === 0 ? '<div class="empty-msg">Sin pagos</div>' : pagos.map(x =>
+      '<div class="pago-item"><div class="pago-top"><div class="pago-info"><div class="pago-detalle">' + textoTipoPago(x.tipo) + ' · ' + f(x.fechaPago) + '</div></div>' +
+      '<div class="pago-monto ' + x.tipo + '">' + dinero(x.monto) + '</div></div>' +
+      '<div class="pago-acciones"><button class="btn-print" onclick="cerrarHistorialCliente();imprimirReciboPago(\'' + x.id + '\')">🖨️ Recibo</button></div></div>'
+    ).join('');
+    document.getElementById('historialContenido').innerHTML = html;
+    document.getElementById('modalHistorialCliente').classList.add('active');
+  };
+
+  window.cerrarHistorialCliente = function () { document.getElementById('modalHistorialCliente').classList.remove('active'); };
+
+  function textoTipoPago(tipo) {
+    if (tipo === 'interes') return 'Solo interés';
+    if (tipo === 'cuota') return 'Cuota (capital+interés)';
+    if (tipo === 'interesEmpeno') return 'Interés de empeño';
+    if (tipo === 'saldo') return 'Préstamo saldado';
+    return 'Capital + interés';
+  }
+
   window.eliminarPrestamo = async function (id) {
     if (!confirm('¿Eliminar este préstamo?')) return;
     try { await deleteDoc(doc(db, 'prestamos', id)); } catch (error) { alert('Error al eliminar: ' + error.message); }
@@ -656,8 +755,8 @@
   function renderizarPrestamos() {
     const contenedor = document.getElementById('listaPrestamos');
     const alerta = document.getElementById('alertaCobros');
-    if (prestamosCache.length === 0) {
-      contenedor.innerHTML = '<div class="empty-msg">Aún no hay préstamos. Toca + para agregar uno.</div>';
+    if (prestamosCache.filter(p => p.estado !== 'pagado').length === 0) {
+      contenedor.innerHTML = '<div class="empty-msg">No hay préstamos activos. Toca + para agregar uno.<br>Los préstamos saldados se ven en el Historial de cada cliente.</div>';
       alerta.classList.add('vacia');
       return;
     }
@@ -672,7 +771,7 @@
       if (hoy.length > 0) texto += '📅 <strong>' + hoy.length + ' cobro(s) vence(n) hoy:</strong> ' + hoy.map(p => p.clienteNombre).join(', ') + '.';
       alerta.innerHTML = texto;
     }
-    contenedor.innerHTML = prestamosCache.map(p => {
+    contenedor.innerHTML = activos.map(p => {
       let badge = '';
       if (p.estado === 'pagado') { badge = '<span class="badge badge-gris">Pagado</span>'; }
       else {
@@ -694,8 +793,8 @@
         : 'Solo interés: $' + montoInteresSolo.toLocaleString(undefined, {maximumFractionDigits: 2});
       const botonesPago = p.estado !== 'pagado'
         ? (esCuotas
-            ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>'
-            : '<button class="btn-ok" onclick="abonarCapital(\'' + p.id + '\')">Abonar capital</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>')
+            ? '<button class="btn-ok" onclick="pagarCuota(\'' + p.id + '\')">Pagar cuota</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-saldar" onclick="saldarPrestamo(\'' + p.id + '\')">💰 Saldar</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>'
+            : '<button class="btn-ok" onclick="abonarCapital(\'' + p.id + '\')">Abonar capital</button><button class="btn-interes" onclick="pagarInteres(\'' + p.id + '\')">Pagar interés</button><button class="btn-saldar" onclick="saldarPrestamo(\'' + p.id + '\')">💰 Saldar</button><button class="btn-edit" onclick="editarPrestamo(\'' + p.id + '\')">Editar</button>')
         : '';
       return '<div class="prestamo-item">' +
         '<div class="prestamo-top"><div class="prestamo-nombre">' + p.clienteNombre + '</div><div class="prestamo-monto">$' + Number(p.saldoCapitalPendiente).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div></div>' +
@@ -876,12 +975,12 @@
     const capitalInvertidoPrestamos = prestamosCache.filter(p => p.estado !== 'pagado').reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
     const capitalInvertidoEmpenos = empenosCache.filter(e => e.estado === 'activo').reduce((sum, e) => sum + Number(e.valor || 0), 0);
     const capitalInvertido = capitalInvertidoPrestamos + capitalInvertidoEmpenos;
-    const capitalRecuperadoPrestamos = pagosCache.filter(p => p.tipo === 'cuota' || p.tipo === 'capital').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
+    const capitalRecuperadoPrestamos = pagosCache.filter(p => p.tipo === 'cuota' || p.tipo === 'capital' || p.tipo === 'saldo').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
     const capitalRecuperadoEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.valor || 0), 0);
     const capitalRecuperado = capitalRecuperadoPrestamos + capitalRecuperadoEmpenos;
     const gananciasCuotas = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes').reduce((sum, p) => sum + Number(p.monto || 0), 0);
-    const gananciasCapitalAbono = pagosCache.filter(p => p.tipo === 'capital').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
+    const gananciasCapitalAbono = pagosCache.filter(p => p.tipo === 'capital' || p.tipo === 'saldo').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.ganancia || 0), 0);
     const gananciasInteresEmpenos = pagosCache.filter(p => p.tipo === 'interesEmpeno').reduce((sum, p) => sum + Number(p.monto || 0), 0);
     const ganancias = gananciasCuotas + gananciasInteres + gananciasCapitalAbono + gananciasEmpenos + gananciasInteresEmpenos;
@@ -896,7 +995,7 @@
     contenedor.innerHTML = pagosCache.map(p => {
       const fecha = new Date(p.fechaPago);
       const fechaTexto = fecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
-      const tipoTexto = p.tipo === 'interes' ? 'Solo interés' : (p.tipo === 'cuota' ? 'Cuota (capital+interés)' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : 'Capital + interés'));
+      const tipoTexto = textoTipoPago(p.tipo);
       return '<div class="pago-item"><div class="pago-top"><div class="pago-info"><div class="pago-nombre">' + p.clienteNombre + '</div><div class="pago-detalle">' + tipoTexto + ' · ' + fechaTexto + '</div></div>' +
         '<div class="pago-monto ' + p.tipo + '">$' + Number(p.monto).toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div></div>' +
         '<div class="pago-acciones"><button class="btn-print" onclick="imprimirReciboPago(\'' + p.id + '\')">🖨️ Recibo</button>' +
@@ -907,7 +1006,7 @@
   window.imprimirReciboPago = function (id) {
     const p = pagosCache.find(x => x.id === id);
     if (!p) return;
-    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : 'Capital + interés'));
+    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : (p.tipo === 'saldo' ? 'Préstamo saldado' : 'Capital + interés')));
     mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: tipoTexto, monto: p.monto, cuotas: null, saldo: null, proximoPago: p.fechaNueva || '' });
   };
 
@@ -932,6 +1031,13 @@
             await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
               saldoCapitalPendiente: nuevoSaldoCapital, cuotasPagadas: nuevasCuotasPagadas,
               fechaProximoPago: pago.fechaAnterior, estado: 'activo'
+            });
+          } else if (pago.tipo === 'saldo') {
+            await updateDoc(doc(db, 'prestamos', pago.prestamoId), {
+              saldoCapitalPendiente: Number(pago.saldoAnterior || 0),
+              cuotasPagadas: Number(pago.cuotasPagadasAnterior || 0),
+              fechaProximoPago: pago.fechaAnterior || prestamo.fechaProximoPago,
+              estado: 'activo', montoSaldado: null, fechaSaldado: null
             });
           } else if (pago.tipo === 'capital') {
             const nuevoSaldoCapital = Number(prestamo.saldoCapitalPendiente || 0) + Number(pago.montoCapital || 0);
@@ -971,7 +1077,7 @@
     } else {
       lineaCuotas.style.display = 'none'; lineaSaldo.style.display = 'none';
     }
-    lineaProximo.style.display = 'flex';
+    lineaProximo.style.display = datos.proximoPago ? 'flex' : 'none';
     document.getElementById('reciboProximo').textContent = datos.proximoPago || '';
     document.getElementById('modalRecibo').classList.add('active');
   };
