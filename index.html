@@ -153,8 +153,12 @@
     <input type="text" id="clienteCedula" placeholder="Número de identificación">
     <label>Foto de la identificación</label>
     <img id="previewFoto" class="preview-foto">
-    <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none" onchange="previsualizarFoto(event)">
-    <button class="btn-foto" onclick="document.getElementById('inputFoto').click()">📷 Tomar o subir foto</button>
+    <input type="file" id="inputFotoCamara" accept="image/*" capture="environment" style="display:none" onchange="previsualizarFoto(event)">
+    <input type="file" id="inputFoto" accept="image/*" style="display:none" onchange="previsualizarFoto(event)">
+    <div class="fila-doble">
+      <div><button class="btn-foto" onclick="document.getElementById('inputFotoCamara').click()">📷 Tomar foto</button></div>
+      <div><button class="btn-foto" onclick="document.getElementById('inputFoto').click()">🖼️ Subir de fotos</button></div>
+    </div>
     <button class="btn-primary" id="btnGuardarCliente" onclick="guardarCliente()">Guardar cliente</button>
   </div>
 </div>
@@ -199,8 +203,12 @@
     <input type="text" id="empenoArticulo" placeholder="Ej. Laptop HP, cadena de oro...">
     <label>Foto del artículo</label>
     <img id="previewFotoEmpeno" class="preview-foto">
-    <input type="file" id="inputFotoEmpeno" accept="image/*" capture="environment" style="display:none" onchange="previsualizarFotoEmpeno(event)">
-    <button class="btn-foto" onclick="document.getElementById('inputFotoEmpeno').click()">📷 Tomar o subir foto</button>
+    <input type="file" id="inputFotoEmpenoCamara" accept="image/*" capture="environment" style="display:none" onchange="previsualizarFotoEmpeno(event)">
+    <input type="file" id="inputFotoEmpeno" accept="image/*" style="display:none" onchange="previsualizarFotoEmpeno(event)">
+    <div class="fila-doble">
+      <div><button class="btn-foto" onclick="document.getElementById('inputFotoEmpenoCamara').click()">📷 Tomar foto</button></div>
+      <div><button class="btn-foto" onclick="document.getElementById('inputFotoEmpeno').click()">🖼️ Subir de fotos</button></div>
+    </div>
     <div class="fila-doble">
       <div><label>Valor entregado</label><input type="number" id="empenoValor" placeholder="1000"></div>
       <div><label>Ganancia por período</label><input type="number" id="empenoGanancia" placeholder="200"></div>
