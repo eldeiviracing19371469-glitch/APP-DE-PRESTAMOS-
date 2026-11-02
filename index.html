@@ -102,7 +102,7 @@
 </head>
 <body>
 
-<header class="topbar"><h2 id="tituloSeccion">Clientes</h2></header>
+<header class="topbar"><h2 id="tituloSeccion">Clientes</h2><span style="font-size:12px;color:#999;">v1.6</span></header>
 
 <main>
   <div id="seccionClientes">
@@ -584,21 +584,48 @@
     finally { boton.disabled = false; boton.textContent = 'Guardar préstamo'; }
   };
 
+  // Períodos cuya fecha de cobro ya llegó (hoy o antes). El próximo que aún no vence no cuenta.
+  function periodosVencidos(fechaProximoPago, frecuencia) {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const vence = new Date(fechaProximoPago + 'T00:00:00');
+    const diffDias = Math.round((hoy - vence) / (1000 * 60 * 60 * 24));
+    if (diffDias < 0) return 0;
+    const diasPeriodo = DIAS_FRECUENCIA[frecuencia] || 7;
+    return 1 + Math.floor(diffDias / diasPeriodo);
+  }
+
+  // Si debe varios períodos, pregunta cuántos paga hoy (1 a n). Devuelve null si cancela.
+  function preguntarCuantos(n, texto) {
+    if (n <= 1) return 1;
+    const r = prompt(texto + '\n\n¿Cuántos paga hoy? (1 a ' + n + ')', n);
+    if (r === null) return null;
+    const k = parseInt(r, 10);
+    if (!k || k < 1 || k > n) { alert('Escribe un número del 1 al ' + n + '.'); return null; }
+    return k;
+  }
+
   window.pagarInteres = async function (id, yaConfirmado) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
     const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-    const montoInteres = interesPendienteDe(p);
-    const avisoAtraso = periodos > 1 ? ' (incluye ' + periodos + ' períodos acumulados)' : '';
-    if (!yaConfirmado && !confirm('¿Confirmar pago de todo el interés pendiente: $' + montoInteres.toLocaleString(undefined, {maximumFractionDigits: 2}) + avisoAtraso + '? El capital no se toca.')) return;
+    const unit = interesUnitarioDe(p);
+    let k = periodos;
+    if (!yaConfirmado) {
+      k = preguntarCuantos(periodos, p.clienteNombre + ' debe ' + periodos + ' períodos de interés de ' + dinero(unit) + ' (total ' + dinero(interesPendienteDe(p)) + ').');
+      if (k === null) return;
+    }
+    const pagaTodo = k === periodos;
+    // si paga todo, se cobra todo lo pendiente (incluye atrasado de libreta y abonos); si no, solo los períodos elegidos
+    const montoInteres = pagaTodo ? interesPendienteDe(p) : Math.round(k * unit * 100) / 100;
+    if (!yaConfirmado && !confirm('¿Confirmar pago de interés de ' + dinero(montoInteres) + (k > 1 ? ' (' + k + ' períodos)' : '') + '? El capital no se toca.')) return;
     try {
       const fechaAnterior = p.fechaProximoPago;
-      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
+      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, k);
       const extraAnterior = Number(p.interesExtra || 0);
-      await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha, interesExtra: 0 });
+      await updateDoc(doc(db, 'prestamos', id), { fechaProximoPago: nuevaFecha, interesExtra: pagaTodo ? 0 : extraAnterior });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
-        tipo: 'interes', monto: montoInteres, periodos, extraAnterior, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
+        tipo: 'interes', monto: montoInteres, periodos: k, extraAnterior, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
       if (yaConfirmado) mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: 'Pago de interés', monto: montoInteres, interesPendiente: 0, proximoPago: nuevaFecha });
     } catch (error) { alert('Error: ' + error.message); }
@@ -609,24 +636,27 @@
     if (!p) return;
     const periodos = Math.min(calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia), p.cantidadPagos - p.cuotasPagadas);
     if (periodos <= 0) return;
-    const montoCapital = p.capitalPorCuota * periodos;
-    const montoInteres = Math.max(0, p.interesPorCuota * periodos + Number(p.interesExtra || 0));
+    const k = preguntarCuantos(periodos, p.clienteNombre + ' debe ' + periodos + ' cuotas de ' + dinero(p.cuotaFija) + ' (total ' + dinero(periodos * p.cuotaFija) + ').');
+    if (k === null) return;
+    const pagaTodo = k === periodos;
+    const extraAnterior = Number(p.interesExtra || 0);
+    const montoCapital = p.capitalPorCuota * k;
+    const montoInteres = Math.max(0, p.interesPorCuota * k + (pagaTodo ? extraAnterior : 0));
     const montoTotal = montoCapital + montoInteres;
-    const avisoAtraso = periodos > 1 ? ' (' + periodos + ' cuotas)' : '';
-    if (!confirm('¿Confirmar pago de cuota' + avisoAtraso + ' de $' + montoTotal.toLocaleString(undefined, {maximumFractionDigits: 2}) + '?')) return;
-    const nuevasCuotasPagadas = p.cuotasPagadas + periodos;
+    if (!confirm('¿Confirmar pago de ' + (k > 1 ? k + ' cuotas' : '1 cuota') + ' por ' + dinero(montoTotal) + '?')) return;
+    const nuevasCuotasPagadas = p.cuotasPagadas + k;
     const nuevoSaldoCapital = Math.max(0, p.saldoCapitalPendiente - montoCapital);
     const pagoCompleto = nuevasCuotasPagadas >= p.cantidadPagos;
     try {
       const fechaAnterior = p.fechaProximoPago;
-      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
+      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, k);
       await updateDoc(doc(db, 'prestamos', id), {
         cuotasPagadas: nuevasCuotasPagadas, saldoCapitalPendiente: nuevoSaldoCapital,
-        fechaProximoPago: nuevaFecha, estado: pagoCompleto ? 'pagado' : 'activo', interesExtra: 0
+        fechaProximoPago: nuevaFecha, estado: pagoCompleto ? 'pagado' : 'activo', interesExtra: pagaTodo ? 0 : extraAnterior
       });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
-        tipo: 'cuota', monto: montoTotal, montoCapital, montoInteres, periodos, extraAnterior: Number(p.interesExtra || 0),
+        tipo: 'cuota', monto: montoTotal, montoCapital, montoInteres, periodos: k, extraAnterior,
         fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
     } catch (error) { alert('Error: ' + error.message); }
@@ -635,30 +665,48 @@
   window.abonarCapital = async function (id) {
     const p = prestamosCache.find(x => x.id === id);
     if (!p) return;
-    const periodos = calcularPeriodosPendientes(p.fechaProximoPago, p.frecuencia);
-    const interesDebido = interesPendienteDe(p);
-    const abono = parseFloat(prompt(
-      'Capital pendiente: $' + p.saldoCapitalPendiente +
-      '\nInterés pendiente: $' + interesDebido.toLocaleString(undefined,{maximumFractionDigits:2}) +
-      '\n¿Cuánto capital quiere abonar (además del interés)?'
-    ));
-    if (!abono || abono <= 0) return;
-    const totalACobrar = abono + interesDebido;
+    const extraAnterior = Number(p.interesExtra || 0);
+    const vencidos = periodosVencidos(p.fechaProximoPago, p.frecuencia);
+    // interés que ya venció (fechas de cobro que llegaron) + atrasado/abonos; el del período que no ha vencido NO se cobra
+    const interesVencidoBruto = Math.round((vencidos * interesUnitarioDe(p) + extraAnterior) * 100) / 100;
+    const interesVencido = Math.max(0, interesVencidoBruto);
+
+    const escrito = prompt(
+      p.clienteNombre + '\nCapital pendiente: ' + dinero(p.saldoCapitalPendiente) +
+      (interesVencido > 0 ? '\nInterés vencido: ' + dinero(interesVencido) : '\nEstá al día con el interés.') +
+      '\n\n¿Cuánto abona al capital?'
+    );
+    if (escrito === null) return;
+    const abono = parseFloat(String(escrito).replace(/[$,\s]/g, ''));
+    if (!abono || abono <= 0) { alert('Cantidad no válida.'); return; }
+    if (abono > p.saldoCapitalPendiente) { alert('El abono no puede ser mayor que el capital pendiente (' + dinero(p.saldoCapitalPendiente) + ').'); return; }
+
+    let cobraInteres = false;
+    if (interesVencido > 0) {
+      cobraInteres = confirm('Tiene ' + dinero(interesVencido) + ' de interés vencido.\n\n¿Lo cobras junto con el abono?\nAceptar = Sí, cobrar interés también\nCancelar = Solo abonar al capital');
+    }
+    const montoInteres = cobraInteres ? interesVencido : 0;
+    const totalACobrar = abono + montoInteres;
     const nuevoSaldo = Math.max(0, p.saldoCapitalPendiente - abono);
-    if (!confirm('Total a cobrar: $' + totalACobrar.toLocaleString(undefined,{maximumFractionDigits:2}) + ' ($' + abono.toLocaleString(undefined,{maximumFractionDigits:2}) + ' capital + $' + interesDebido.toLocaleString(undefined,{maximumFractionDigits:2}) + ' interés)')) return;
+    if (!confirm('Total a cobrar: ' + dinero(totalACobrar) + '\n(' + dinero(abono) + ' capital' + (montoInteres > 0 ? ' + ' + dinero(montoInteres) + ' interés' : '') + ')\n\nCapital quedará en: ' + dinero(nuevoSaldo) + '\n\n¿Confirmar?')) return;
     try {
       const fechaAnterior = p.fechaProximoPago;
-      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, periodos);
+      // Los períodos vencidos se cierran: si no se cobra el interés, se guarda como pendiente
+      // (calculado con el capital de antes del abono, para no perderlo).
+      const nuevaFecha = avanzarFecha(p.fechaProximoPago, p.frecuencia, vencidos);
+      // si no cobra, se guarda lo vencido (o se conserva lo que haya abonado de más al interés)
+      const nuevoExtra = cobraInteres ? 0 : interesVencidoBruto;
       await updateDoc(doc(db, 'prestamos', id), {
         saldoCapitalPendiente: nuevoSaldo,
         fechaProximoPago: nuevaFecha,
-        estado: nuevoSaldo === 0 ? 'pagado' : 'activo', interesExtra: 0
+        estado: nuevoSaldo === 0 ? 'pagado' : 'activo', interesExtra: nuevoExtra
       });
       await addDoc(collection(db, 'pagos'), {
         prestamoId: id, clienteId: p.clienteId, clienteNombre: p.clienteNombre,
-        tipo: 'capital', monto: totalACobrar, montoCapital: abono, montoInteres: interesDebido, extraAnterior: Number(p.interesExtra || 0),
-        periodos, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
+        tipo: 'capital', monto: totalACobrar, montoCapital: abono, montoInteres, extraAnterior,
+        periodos: vencidos, fechaAnterior, fechaNueva: nuevaFecha, fechaPago: Date.now()
       });
+      mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: montoInteres > 0 ? 'Abono capital + interés' : 'Abono al capital', monto: totalACobrar, saldo: nuevoSaldo, interesPendiente: nuevoExtra > 0 ? nuevoExtra : null, proximoPago: nuevaFecha });
     } catch (error) { alert('Error: ' + error.message); }
   };
 
