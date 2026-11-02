@@ -102,7 +102,7 @@
 </head>
 <body>
 
-<header class="topbar"><h2 id="tituloSeccion">Clientes</h2><span style="font-size:12px;color:#999;">v1.6</span></header>
+<header class="topbar"><h2 id="tituloSeccion">Clientes</h2><span style="font-size:12px;color:#999;">v1.7</span></header>
 
 <main>
   <div id="seccionClientes">
@@ -794,6 +794,7 @@
     if (tipo === 'interesEmpeno') return 'Interés de empeño';
     if (tipo === 'saldo') return 'Préstamo saldado';
     if (tipo === 'abonoInteres') return 'Abono al interés';
+    if (tipo === 'ventaEmpeno') return 'Venta de artículo';
     return 'Capital + interés';
   }
 
@@ -996,9 +997,32 @@
   };
 
   window.marcarPerdido = async function (id) {
-    if (!confirm('¿Marcar este artículo como no recuperado (se queda contigo)?')) return;
+    if (!confirm('¿Marcar este artículo como perdido? (el cliente no lo recuperó y se queda contigo)')) return;
     try { await updateDoc(doc(db, 'empenos', id), { estado: 'perdido' }); }
     catch (error) { alert('Error: ' + error.message); }
+  };
+
+  window.venderEmpeno = async function (id) {
+    const e = empenosCache.find(x => x.id === id);
+    if (!e) return;
+    const escrito = prompt('Vender: ' + e.articulo + '\nLo prestado fue: ' + dinero(e.valor) + '\n\n¿En cuánto lo vendiste?');
+    if (escrito === null) return;
+    const precio = parseFloat(String(escrito).replace(/[$,\s]/g, ''));
+    if (!precio || precio <= 0) { alert('Precio no válido.'); return; }
+    const valor = Number(e.valor || 0);
+    const diferencia = precio - valor;
+    const textoRes = diferencia >= 0 ? 'Ganancia: ' + dinero(diferencia) : 'Pérdida: ' + dinero(-diferencia);
+    if (!confirm('Precio de venta: ' + dinero(precio) + '\nPrestado: ' + dinero(valor) + '\n' + textoRes + '\n\n¿Confirmar venta?')) return;
+    try {
+      await updateDoc(doc(db, 'empenos', id), { estado: 'vendido', precioVenta: precio, fechaVenta: Date.now() });
+      await addDoc(collection(db, 'pagos'), {
+        empenoId: id, clienteId: e.clienteId, clienteNombre: e.clienteNombre, articulo: e.articulo,
+        tipo: 'ventaEmpeno', monto: precio,
+        montoCapital: Math.min(precio, valor), montoInteres: Math.max(0, diferencia),
+        fechaPago: Date.now()
+      });
+      mostrarRecibo({ clienteNombre: e.clienteNombre, tipo: 'Venta: ' + e.articulo, monto: precio, proximoPago: '' });
+    } catch (error) { alert('Error: ' + error.message); }
   };
 
   window.pagarInteresEmpeno = async function (id) {
@@ -1051,7 +1075,12 @@
     contenedor.innerHTML = empenosCache.map(e => {
       let badge = '';
       if (e.estado === 'recuperado') badge = '<span class="badge badge-verde">Recuperado</span>';
-      else if (e.estado === 'perdido') badge = '<span class="badge badge-gris">No recuperado</span>';
+      else if (e.estado === 'perdido') badge = '<span class="badge badge-gris">Artículo perdido</span>';
+      else if (e.estado === 'vendido') {
+        const dif = Number(e.precioVenta || 0) - Number(e.valor || 0);
+        badge = '<span class="badge badge-verde">Vendido en ' + dinero(e.precioVenta) + '</span> ' +
+          (dif >= 0 ? '<span class="badge badge-verde">Ganancia ' + dinero(dif) + '</span>' : '<span class="badge badge-rojo">Pérdida ' + dinero(-dif) + '</span>');
+      }
       else {
         const estado = calcularEstadoFecha(e.fechaLimite);
         if (estado === 'atrasado') badge = '<span class="badge badge-rojo">Vencido</span>';
@@ -1060,8 +1089,8 @@
       }
       const total = Number(e.valor) + Number(e.ganancia || 0);
       const botones = e.estado === 'activo'
-        ? '<button class="btn-ok" onclick="marcarRecuperado(\'' + e.id + '\')">Recuperado</button><button class="btn-interes" onclick="pagarInteresEmpeno(\'' + e.id + '\')">Pagar interés</button><button class="btn-danger" onclick="marcarPerdido(\'' + e.id + '\')">No recuperado</button>'
-        : '';
+        ? '<button class="btn-ok" onclick="marcarRecuperado(\'' + e.id + '\')">Recuperado</button><button class="btn-interes" onclick="pagarInteresEmpeno(\'' + e.id + '\')">Pagar interés</button><button class="btn-danger" onclick="marcarPerdido(\'' + e.id + '\')">Artículo perdido</button>'
+        : (e.estado === 'perdido' ? '<button class="btn-saldar" onclick="venderEmpeno(\'' + e.id + '\')">💲 Vender</button>' : '');
       return '<div class="empeno-item">' +
         '<img class="empeno-foto" src="' + (e.fotoURL || '') + '" onerror="this.style.background=\'#ddd\'">' +
         '<div class="empeno-info">' +
@@ -1086,16 +1115,18 @@
 
   function renderizarResumen() {
     const capitalInvertidoPrestamos = prestamosCache.filter(p => p.estado !== 'pagado').reduce((sum, p) => sum + Number(p.saldoCapitalPendiente || 0), 0);
-    const capitalInvertidoEmpenos = empenosCache.filter(e => e.estado === 'activo').reduce((sum, e) => sum + Number(e.valor || 0), 0);
+    const capitalInvertidoEmpenos = empenosCache.filter(e => e.estado === 'activo' || e.estado === 'perdido').reduce((sum, e) => sum + Number(e.valor || 0), 0);
     const capitalInvertido = capitalInvertidoPrestamos + capitalInvertidoEmpenos;
     const capitalRecuperadoPrestamos = pagosCache.filter(p => p.tipo === 'cuota' || p.tipo === 'capital' || p.tipo === 'saldo').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
-    const capitalRecuperadoEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.valor || 0), 0);
+    const capitalRecuperadoEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.valor || 0), 0)
+      + pagosCache.filter(p => p.tipo === 'ventaEmpeno').reduce((sum, p) => sum + Number(p.montoCapital || 0), 0);
     const capitalRecuperado = capitalRecuperadoPrestamos + capitalRecuperadoEmpenos;
     const gananciasCuotas = pagosCache.filter(p => p.tipo === 'cuota').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasInteres = pagosCache.filter(p => p.tipo === 'interes' || p.tipo === 'abonoInteres').reduce((sum, p) => sum + Number(p.monto || 0), 0);
     const gananciasCapitalAbono = pagosCache.filter(p => p.tipo === 'capital' || p.tipo === 'saldo').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const gananciasEmpenos = empenosCache.filter(e => e.estado === 'recuperado').reduce((sum, e) => sum + Number(e.ganancia || 0), 0);
-    const gananciasInteresEmpenos = pagosCache.filter(p => p.tipo === 'interesEmpeno').reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    const gananciasInteresEmpenos = pagosCache.filter(p => p.tipo === 'interesEmpeno').reduce((sum, p) => sum + Number(p.monto || 0), 0)
+      + pagosCache.filter(p => p.tipo === 'ventaEmpeno').reduce((sum, p) => sum + Number(p.montoInteres || 0), 0);
     const ganancias = gananciasCuotas + gananciasInteres + gananciasCapitalAbono + gananciasEmpenos + gananciasInteresEmpenos;
     document.getElementById('resCapitalInvertido').textContent = '$' + capitalInvertido.toLocaleString(undefined, {maximumFractionDigits: 2});
     document.getElementById('resCapitalRecuperado').textContent = '$' + capitalRecuperado.toLocaleString(undefined, {maximumFractionDigits: 2});
@@ -1119,7 +1150,7 @@
   window.imprimirReciboPago = function (id) {
     const p = pagosCache.find(x => x.id === id);
     if (!p) return;
-    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : (p.tipo === 'saldo' ? 'Préstamo saldado' : (p.tipo === 'abonoInteres' ? 'Abono al interés' : 'Capital + interés'))));
+    const tipoTexto = p.tipo === 'interes' ? 'Pago de solo interés' : (p.tipo === 'cuota' ? 'Pago de cuota' : (p.tipo === 'interesEmpeno' ? 'Interés de empeño' : (p.tipo === 'saldo' ? 'Préstamo saldado' : (p.tipo === 'abonoInteres' ? 'Abono al interés' : (p.tipo === 'ventaEmpeno' ? 'Venta: ' + (p.articulo || 'artículo') : 'Capital + interés')))));
     mostrarRecibo({ clienteNombre: p.clienteNombre, tipo: tipoTexto, monto: p.monto, cuotas: null, saldo: null, interesPendiente: p.tipo === 'abonoInteres' ? p.interesPendiente : null, proximoPago: p.fechaNueva || '' });
   };
 
@@ -1128,7 +1159,11 @@
     if (!pago) return;
     if (!confirm('¿Eliminar este pago del historial? Se deshará su efecto correspondiente.')) return;
     try {
-      if (pago.tipo === 'interesEmpeno') {
+      if (pago.tipo === 'ventaEmpeno') {
+        if (empenosCache.find(e => e.id === pago.empenoId)) {
+          await updateDoc(doc(db, 'empenos', pago.empenoId), { estado: 'perdido', precioVenta: null, fechaVenta: null });
+        }
+      } else if (pago.tipo === 'interesEmpeno') {
         const empeno = empenosCache.find(e => e.id === pago.empenoId);
         if (empeno) {
           await updateDoc(doc(db, 'empenos', pago.empenoId), { fechaLimite: pago.fechaAnterior });
